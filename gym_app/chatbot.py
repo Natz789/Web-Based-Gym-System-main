@@ -1,29 +1,92 @@
 """
-AI Chatbot Engine for Rhose Gym
-Uses Ollama with llama3.2:3b model for 8GB RAM optimization
+Enhanced AI Chatbot Engine for Rhose Gym
+Supports dynamic model switching, conversation persistence, and streaming responses
+Optimized for E595 ThinkPad (8-16GB RAM)
 """
 
 import ollama
+import uuid
+import time
 from django.conf import settings
-from .models import User, MembershipPlan, FlexibleAccess, UserMembership, Payment, Attendance
+from .models import (
+    User, MembershipPlan, FlexibleAccess, UserMembership, Payment, Attendance,
+    ChatbotConfig, Conversation, ConversationMessage
+)
 from datetime import date, timedelta
 import json
 
 
 class GymChatbot:
-    """AI-powered chatbot for gym assistance"""
-    
-    def __init__(self, user=None):
+    """AI-powered chatbot for gym assistance with dynamic configuration"""
+
+    def __init__(self, user=None, conversation_id=None, session_key=None):
         self.user = user
-        self.model = self.model = "llama3.2:1b"
-  # Optimized for 8GB RAM
+        self.session_key = session_key
+        self.config = ChatbotConfig.get_config()
+        self.model = self.config.active_model
+        self.conversation = None
         self.conversation_history = []
-        
+
+        # Load or create conversation
+        if conversation_id:
+            self._load_conversation(conversation_id)
+        elif self.config.enable_persistence:
+            self._create_conversation()
+
+    def _load_conversation(self, conversation_id):
+        """Load existing conversation from database"""
+        try:
+            if self.user and self.user.is_authenticated:
+                self.conversation = Conversation.objects.get(
+                    conversation_id=conversation_id,
+                    user=self.user
+                )
+            else:
+                self.conversation = Conversation.objects.get(
+                    conversation_id=conversation_id,
+                    session_key=self.session_key
+                )
+
+            # Load message history
+            messages = self.conversation.messages.all()
+            for msg in messages:
+                if msg.role != 'system':  # Skip system messages
+                    self.conversation_history.append({
+                        'role': msg.role,
+                        'content': msg.content
+                    })
+        except Conversation.DoesNotExist:
+            self._create_conversation()
+
+    def _create_conversation(self):
+        """Create a new conversation"""
+        conversation_id = str(uuid.uuid4())
+        self.conversation = Conversation.objects.create(
+            user=self.user if self.user and self.user.is_authenticated else None,
+            conversation_id=conversation_id,
+            model_used=self.model,
+            session_key=self.session_key if not (self.user and self.user.is_authenticated) else None
+        )
+
+    def _save_message(self, role, content, response_time_ms=None):
+        """Save message to database if persistence is enabled"""
+        if self.config.enable_persistence and self.conversation:
+            ConversationMessage.objects.create(
+                conversation=self.conversation,
+                role=role,
+                content=content,
+                response_time_ms=response_time_ms
+            )
+
+            # Generate title from first user message
+            if role == 'user' and not self.conversation.title:
+                self.conversation.generate_title()
+
     def get_system_context(self):
         """Generate system context based on user role and gym data"""
-        
+
         # Base gym information
-        context = """You are FitBot, an AI assistant for Rhose Gym, a modern fitness center. 
+        context = """You are FitBot, an AI assistant for Rhose Gym, a modern fitness center.
 Your role is to help members, staff, and admins with:
 1. Gym membership information and management
 2. Fitness and workout advice
@@ -32,8 +95,9 @@ Your role is to help members, staff, and admins with:
 5. Nutrition and health tips
 
 Always be friendly, professional, and encouraging. When discussing the gym system, use the data provided.
+Keep your responses concise and helpful.
 """
-        
+
         # Add gym data context
         active_plans = MembershipPlan.objects.filter(is_active=True)
         if active_plans.exists():
@@ -42,17 +106,17 @@ Always be friendly, professional, and encouraging. When discussing the gym syste
                 context += f"- {plan.name}: ₱{plan.price} for {plan.duration_days} days\n"
                 if plan.description:
                     context += f"  Description: {plan.description}\n"
-        
+
         walk_in_passes = FlexibleAccess.objects.filter(is_active=True)
         if walk_in_passes.exists():
             context += "\n\nWALK-IN PASSES:\n"
             for pass_obj in walk_in_passes:
                 context += f"- {pass_obj.name}: ₱{pass_obj.price} for {pass_obj.duration_days} day(s)\n"
-        
+
         # Add user-specific context
         if self.user and self.user.is_authenticated:
             context += f"\n\nCURRENT USER: {self.user.get_full_name()} ({self.user.role})\n"
-            
+
             if self.user.role == 'member':
                 # Get member's active membership
                 active_membership = UserMembership.objects.filter(
@@ -60,26 +124,26 @@ Always be friendly, professional, and encouraging. When discussing the gym syste
                     status='active',
                     end_date__gte=date.today()
                 ).first()
-                
+
                 if active_membership:
                     context += f"Active Membership: {active_membership.plan.name}\n"
                     context += f"Days Remaining: {active_membership.days_remaining()}\n"
                     context += f"Expires: {active_membership.end_date}\n"
-                    
+
                     # Get kiosk PIN
                     if self.user.kiosk_pin:
                         context += f"Kiosk PIN: {self.user.kiosk_pin}\n"
                 else:
                     context += "No active membership\n"
-                
+
                 # Get recent attendance
                 recent_attendance = Attendance.objects.filter(
                     user=self.user
                 ).order_by('-check_in')[:5]
-                
+
                 if recent_attendance.exists():
                     context += f"\nRECENT GYM VISITS: {recent_attendance.count()} visits logged\n"
-            
+
             elif self.user.role in ['admin', 'staff']:
                 # Get today's stats for staff/admin
                 today = date.today()
@@ -89,25 +153,25 @@ Always be friendly, professional, and encouraging. When discussing the gym syste
                 currently_in = Attendance.objects.filter(
                     check_out__isnull=True
                 ).count()
-                
+
                 context += f"\nTODAY'S STATS:\n"
                 context += f"- Check-ins today: {today_checkins}\n"
                 context += f"- Currently in gym: {currently_in}\n"
-        
+
         context += "\n\nGYM FACILITIES:\n"
         context += "- Cardio equipment (treadmills, bikes, ellipticals)\n"
         context += "- Strength training (free weights, machines)\n"
         context += "- Group fitness classes\n"
         context += "- Locker rooms and showers\n"
-        
+
         context += "\n\nGYM POLICIES:\n"
         context += "- Members must check in/out using kiosk PIN\n"
         context += "- Proper gym attire required\n"
         context += "- Clean equipment after use\n"
         context += "- Memberships expire on end date\n"
-        
+
         return context
-    
+
     def get_fitness_knowledge(self):
         """General fitness and gym culture knowledge"""
         return """
@@ -144,16 +208,17 @@ COMMON MISTAKES:
 - Inconsistent training
 - Overtraining without rest
 """
-    
-    def chat(self, user_message, conversation_id=None):
+
+    def chat(self, user_message):
         """
         Process user message and generate AI response
         """
-        
+        start_time = time.time()
+
         # Build full context
         system_context = self.get_system_context()
         fitness_knowledge = self.get_fitness_knowledge()
-        
+
         # Prepare messages for Ollama
         messages = [
             {
@@ -161,58 +226,119 @@ COMMON MISTAKES:
                 "content": system_context + fitness_knowledge
             }
         ]
-        
-        # Add conversation history (keep last 6 messages for context)
+
+        # Add conversation history (keep last N messages based on config)
+        context_window = self.config.context_window
         if len(self.conversation_history) > 0:
-            messages.extend(self.conversation_history[-6:])
-        
+            messages.extend(self.conversation_history[-context_window:])
+
         # Add current user message
         messages.append({
             "role": "user",
             "content": user_message
         })
-        
+
         try:
-            # Call Ollama API
-            response = ollama.chat(
+            # Call Ollama API with configured settings
+            ollama_options = self.config.get_ollama_options()
+
+            if self.config.enable_streaming:
+                # Streaming response (for future frontend implementation)
+                return self._chat_stream(messages, user_message, start_time)
+            else:
+                # Standard response
+                response = ollama.chat(
+                    model=self.model,
+                    messages=messages,
+                    options=ollama_options
+                )
+
+                assistant_message = response['message']['content']
+
+                # Calculate response time
+                response_time_ms = int((time.time() - start_time) * 1000)
+
+                # Update conversation history
+                self.conversation_history.append({
+                    "role": "user",
+                    "content": user_message
+                })
+                self.conversation_history.append({
+                    "role": "assistant",
+                    "content": assistant_message
+                })
+
+                # Save messages to database
+                self._save_message("user", user_message)
+                self._save_message("assistant", assistant_message, response_time_ms)
+
+                return {
+                    "success": True,
+                    "response": assistant_message,
+                    "conversation_id": self.conversation.conversation_id if self.conversation else None,
+                    "model": self.model,
+                    "response_time_ms": response_time_ms
+                }
+
+        except Exception as e:
+            error_msg = str(e)
+            if "connection" in error_msg.lower():
+                friendly_error = f"Cannot connect to Ollama. Please ensure:\n1. Ollama is installed\n2. Run 'ollama serve' in terminal\n3. Model '{self.model}' is pulled: 'ollama pull {self.model}'"
+            else:
+                friendly_error = f"Chatbot error: {error_msg}"
+
+            return {
+                "success": False,
+                "error": friendly_error,
+                "response": "I'm having trouble connecting right now. Please check that Ollama is running and the model is available."
+            }
+
+    def _chat_stream(self, messages, user_message, start_time):
+        """Handle streaming responses (for future implementation)"""
+        # This is a placeholder for streaming support
+        # Frontend would need to be updated to handle Server-Sent Events (SSE)
+        try:
+            full_response = ""
+            stream = ollama.chat(
                 model=self.model,
                 messages=messages,
-                options={
-                    "temperature": 0.7,  # Balanced creativity
-                    "top_p": 0.9,
-                    "num_predict": 512,  # Max tokens (shorter for speed)
-                }
+                options=self.config.get_ollama_options(),
+                stream=True
             )
-            
-            assistant_message = response['message']['content']
-            
-            # Update conversation history
-            self.conversation_history.append({
-                "role": "user",
-                "content": user_message
-            })
-            self.conversation_history.append({
-                "role": "assistant",
-                "content": assistant_message
-            })
-            
+
+            for chunk in stream:
+                if 'message' in chunk and 'content' in chunk['message']:
+                    full_response += chunk['message']['content']
+
+            response_time_ms = int((time.time() - start_time) * 1000)
+
+            # Update history
+            self.conversation_history.append({"role": "user", "content": user_message})
+            self.conversation_history.append({"role": "assistant", "content": full_response})
+
+            # Save to database
+            self._save_message("user", user_message)
+            self._save_message("assistant", full_response, response_time_ms)
+
             return {
                 "success": True,
-                "response": assistant_message,
-                "conversation_id": conversation_id
+                "response": full_response,
+                "conversation_id": self.conversation.conversation_id if self.conversation else None,
+                "model": self.model,
+                "response_time_ms": response_time_ms,
+                "streaming": True
             }
-            
         except Exception as e:
             return {
                 "success": False,
-                "error": f"Chatbot error: {str(e)}",
-                "response": "I'm having trouble connecting right now. Please make sure Ollama is running with: ollama serve"
+                "error": str(e),
+                "response": "Streaming error occurred."
             }
-    
+
     def get_quick_suggestions(self):
         """Get context-aware quick reply suggestions"""
         suggestions = []
-        
+
         if self.user and self.user.is_authenticated:
             if self.user.role == 'member':
                 suggestions = [
@@ -238,17 +364,48 @@ COMMON MISTAKES:
                 "Tips for starting at the gym",
                 "How do I sign up?"
             ]
-        
+
         return suggestions
 
+    @staticmethod
+    def get_available_models():
+        """Get list of available Ollama models on the system"""
+        try:
+            models = ollama.list()
+            available = []
+            for model in models.get('models', []):
+                model_name = model.get('name', '')
+                if model_name:
+                    available.append(model_name)
+            return available
+        except Exception as e:
+            return []
 
+    @staticmethod
+    def check_ollama_status():
+        """Check if Ollama service is running"""
+        try:
+            ollama.list()
+            return {
+                "status": "running",
+                "message": "Ollama is running successfully"
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"Ollama is not running: {str(e)}"
+            }
+
+
+# Legacy compatibility function
 def get_database_context(query):
     """
     Query-specific database context retrieval
+    (Maintained for backward compatibility)
     """
     query_lower = query.lower()
     context = {}
-    
+
     # Membership-related queries
     if any(word in query_lower for word in ['membership', 'plan', 'price', 'cost', 'subscribe']):
         plans = MembershipPlan.objects.filter(is_active=True)
@@ -260,7 +417,7 @@ def get_database_context(query):
                 'description': p.description
             } for p in plans
         ]
-    
+
     # Walk-in queries
     if any(word in query_lower for word in ['walk-in', 'day pass', 'visitor', 'guest']):
         passes = FlexibleAccess.objects.filter(is_active=True)
@@ -271,7 +428,7 @@ def get_database_context(query):
                 'days': p.duration_days
             } for p in passes
         ]
-    
+
     # Statistics queries
     if any(word in query_lower for word in ['stats', 'statistics', 'how many', 'count']):
         context['stats'] = {
@@ -284,5 +441,5 @@ def get_database_context(query):
                 check_out__isnull=True
             ).count()
         }
-    
+
     return context

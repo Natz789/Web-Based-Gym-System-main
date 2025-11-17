@@ -1322,31 +1322,38 @@ def chatbot_api(request):
     """
     if request.method != 'POST':
         return JsonResponse({'error': 'POST method required'}, status=405)
-    
+
     try:
         data = json.loads(request.body)
         user_message = data.get('message', '').strip()
         conversation_id = data.get('conversation_id')
-        
+
         if not user_message:
             return JsonResponse({
                 'success': False,
                 'error': 'Message cannot be empty'
             }, status=400)
-        
+
         # Initialize chatbot with current user
         user = request.user if request.user.is_authenticated else None
-        chatbot = GymChatbot(user=user)
-        
+        session_key = request.session.session_key if not user else None
+
+        # Ensure session exists for anonymous users
+        if not user and not session_key:
+            request.session.create()
+            session_key = request.session.session_key
+
+        chatbot = GymChatbot(user=user, conversation_id=conversation_id, session_key=session_key)
+
         # Get response from chatbot
-        result = chatbot.chat(user_message, conversation_id)
-        
+        result = chatbot.chat(user_message)
+
         # Add quick suggestions
         if result['success']:
             result['suggestions'] = chatbot.get_quick_suggestions()
-        
+
         return JsonResponse(result)
-        
+
     except json.JSONDecodeError:
         return JsonResponse({
             'success': False,
@@ -1368,6 +1375,200 @@ def chatbot_suggestions(request):
     return JsonResponse({
         'success': True,
         'suggestions': suggestions
+    })
+
+
+# ==================== Chatbot Configuration Management ====================
+
+@login_required
+def chatbot_config_view(request):
+    """Chatbot configuration page (Admin only)"""
+    if not request.user.is_admin():
+        messages.error(request, 'Access denied. Admin only.')
+        return redirect('dashboard')
+
+    from .models import ChatbotConfig
+    config = ChatbotConfig.get_config()
+
+    # Get available models from Ollama
+    available_models = GymChatbot.get_available_models()
+    ollama_status = GymChatbot.check_ollama_status()
+
+    context = {
+        'config': config,
+        'available_models': available_models,
+        'ollama_status': ollama_status,
+        'model_choices': ChatbotConfig.MODEL_CHOICES,
+    }
+
+    return render(request, 'gym_app/chatbot_config.html', context)
+
+
+@login_required
+def chatbot_config_update(request):
+    """Update chatbot configuration (Admin only)"""
+    if not request.user.is_admin():
+        return JsonResponse({'success': False, 'error': 'Access denied'}, status=403)
+
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST method required'}, status=405)
+
+    try:
+        from .models import ChatbotConfig
+        config = ChatbotConfig.get_config()
+
+        data = json.loads(request.body)
+
+        # Update configuration fields
+        if 'active_model' in data:
+            config.active_model = data['active_model']
+        if 'temperature' in data:
+            config.temperature = float(data['temperature'])
+        if 'top_p' in data:
+            config.top_p = float(data['top_p'])
+        if 'max_tokens' in data:
+            config.max_tokens = int(data['max_tokens'])
+        if 'context_window' in data:
+            config.context_window = int(data['context_window'])
+        if 'enable_streaming' in data:
+            config.enable_streaming = bool(data['enable_streaming'])
+        if 'enable_persistence' in data:
+            config.enable_persistence = bool(data['enable_persistence'])
+
+        config.updated_by = request.user
+        config.save()
+
+        messages.success(request, 'Chatbot configuration updated successfully.')
+        return JsonResponse({
+            'success': True,
+            'message': 'Configuration updated successfully'
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@login_required
+def chatbot_models_list(request):
+    """List available Ollama models"""
+    try:
+        available_models = GymChatbot.get_available_models()
+        ollama_status = GymChatbot.check_ollama_status()
+
+        from .models import ChatbotConfig
+        config = ChatbotConfig.get_config()
+
+        return JsonResponse({
+            'success': True,
+            'current_model': config.active_model,
+            'available_models': available_models,
+            'ollama_status': ollama_status,
+            'recommended_models': [
+                {
+                    'name': 'llama3.2:1b',
+                    'description': 'Fastest, best for 8GB RAM',
+                    'ram_required': '8GB'
+                },
+                {
+                    'name': 'llama3.2:3b',
+                    'description': 'Balanced performance',
+                    'ram_required': '12GB'
+                },
+                {
+                    'name': 'phi3:3.8b',
+                    'description': 'Efficient and accurate',
+                    'ram_required': '12GB'
+                },
+                {
+                    'name': 'gemma2:2b',
+                    'description': 'Fast alternative',
+                    'ram_required': '8GB'
+                },
+                {
+                    'name': 'mistral:7b',
+                    'description': 'Highest quality',
+                    'ram_required': '16GB'
+                },
+            ]
+        })
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@login_required
+def chatbot_model_switch(request):
+    """Switch active chatbot model (Admin only)"""
+    if not request.user.is_admin():
+        return JsonResponse({'success': False, 'error': 'Access denied'}, status=403)
+
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST method required'}, status=405)
+
+    try:
+        data = json.loads(request.body)
+        new_model = data.get('model')
+
+        if not new_model:
+            return JsonResponse({
+                'success': False,
+                'error': 'Model name required'
+            }, status=400)
+
+        from .models import ChatbotConfig
+        config = ChatbotConfig.get_config()
+        old_model = config.active_model
+        config.active_model = new_model
+        config.updated_by = request.user
+        config.save()
+
+        messages.success(request, f'Switched chatbot model from {old_model} to {new_model}')
+        return JsonResponse({
+            'success': True,
+            'message': f'Model switched to {new_model}',
+            'old_model': old_model,
+            'new_model': new_model
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
+
+
+@login_required
+def chatbot_conversations_list(request):
+    """List user's conversation history"""
+    from .models import Conversation
+
+    if request.user.is_admin():
+        # Admin can see all conversations
+        conversations = Conversation.objects.all()[:50]
+    else:
+        # Users see only their own
+        conversations = Conversation.objects.filter(user=request.user)[:50]
+
+    conversations_data = []
+    for conv in conversations:
+        conversations_data.append({
+            'id': conv.conversation_id,
+            'title': conv.title or 'Untitled',
+            'model': conv.model_used,
+            'created_at': conv.created_at.isoformat(),
+            'updated_at': conv.updated_at.isoformat(),
+            'message_count': conv.messages.count(),
+            'user': conv.user.username if conv.user else 'Anonymous'
+        })
+
+    return JsonResponse({
+        'success': True,
+        'conversations': conversations_data
     })
 
 

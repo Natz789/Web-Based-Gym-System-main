@@ -1,6 +1,9 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import User, MembershipPlan, FlexibleAccess, UserMembership, Payment, WalkInPayment, Analytics, Attendance
+from .models import (
+    User, MembershipPlan, FlexibleAccess, UserMembership, Payment, WalkInPayment,
+    Analytics, Attendance, ChatbotConfig, Conversation, ConversationMessage
+)
 
 
 # Update the UserAdmin in gym_app/admin.py
@@ -235,11 +238,122 @@ class AttendanceAdmin(admin.ModelAdmin):
 
 
 
+@admin.register(ChatbotConfig)
+class ChatbotConfigAdmin(admin.ModelAdmin):
+    """Admin interface for Chatbot Configuration"""
+
+    list_display = ['id', 'active_model', 'temperature', 'max_tokens', 'enable_streaming', 'enable_persistence', 'updated_at']
+
+    fieldsets = (
+        ('Model Configuration', {
+            'fields': ('active_model',),
+            'description': 'Select the Ollama model to use for chatbot responses'
+        }),
+        ('Model Parameters', {
+            'fields': ('temperature', 'top_p', 'max_tokens', 'context_window'),
+            'description': 'Fine-tune how the chatbot generates responses'
+        }),
+        ('Features', {
+            'fields': ('enable_streaming', 'enable_persistence'),
+            'description': 'Enable or disable chatbot features'
+        }),
+        ('Connection Settings', {
+            'fields': ('ollama_host', 'timeout_seconds'),
+            'description': 'Configure connection to Ollama service'
+        }),
+    )
+
+    readonly_fields = ['updated_at', 'updated_by']
+
+    def has_delete_permission(self, request, obj=None):
+        """Prevent deletion of config (singleton)"""
+        return False
+
+    def has_add_permission(self, request):
+        """Only allow one config to exist"""
+        return not ChatbotConfig.objects.exists()
+
+
+@admin.register(Conversation)
+class ConversationAdmin(admin.ModelAdmin):
+    """Admin interface for Chatbot Conversations"""
+
+    list_display = ['conversation_id', 'user_display', 'title', 'model_used', 'message_count', 'created_at', 'updated_at']
+    list_filter = ['model_used', 'created_at', 'updated_at']
+    search_fields = ['conversation_id', 'title', 'user__username', 'user__email', 'session_key']
+    date_hierarchy = 'created_at'
+    readonly_fields = ['conversation_id', 'created_at', 'updated_at']
+
+    fieldsets = (
+        ('Conversation Info', {
+            'fields': ('conversation_id', 'user', 'title', 'model_used')
+        }),
+        ('Session', {
+            'fields': ('session_key',),
+            'description': 'Session key for anonymous users'
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at')
+        }),
+    )
+
+    def user_display(self, obj):
+        """Display user or session info"""
+        if obj.user:
+            return f"{obj.user.username} ({obj.user.get_full_name()})"
+        return f"Anonymous ({obj.session_key[:8]}...)" if obj.session_key else "Anonymous"
+    user_display.short_description = 'User'
+
+    def message_count(self, obj):
+        """Count messages in conversation"""
+        return obj.messages.count()
+    message_count.short_description = '# Messages'
+
+
+@admin.register(ConversationMessage)
+class ConversationMessageAdmin(admin.ModelAdmin):
+    """Admin interface for Conversation Messages"""
+
+    list_display = ['id', 'conversation_link', 'role', 'content_preview', 'response_time_display', 'created_at']
+    list_filter = ['role', 'created_at']
+    search_fields = ['conversation__conversation_id', 'content']
+    date_hierarchy = 'created_at'
+    readonly_fields = ['created_at']
+
+    fieldsets = (
+        ('Message Info', {
+            'fields': ('conversation', 'role', 'content')
+        }),
+        ('Performance', {
+            'fields': ('tokens_used', 'response_time_ms'),
+            'description': 'Performance metrics for assistant responses'
+        }),
+        ('Timestamp', {
+            'fields': ('created_at',)
+        }),
+    )
+
+    def conversation_link(self, obj):
+        """Link to parent conversation"""
+        return obj.conversation.conversation_id[:16] + "..."
+    conversation_link.short_description = 'Conversation'
+
+    def content_preview(self, obj):
+        """Show preview of message content"""
+        return obj.content[:80] + "..." if len(obj.content) > 80 else obj.content
+    content_preview.short_description = 'Content'
+
+    def response_time_display(self, obj):
+        """Display response time in readable format"""
+        if obj.response_time_ms:
+            if obj.response_time_ms >= 1000:
+                return f"{obj.response_time_ms / 1000:.2f}s"
+            return f"{obj.response_time_ms}ms"
+        return "-"
+    response_time_display.short_description = 'Response Time'
+
+
 # Customize admin site headers
 admin.site.site_header = "Gym Management System"
 admin.site.site_title = "Gym Admin"
 admin.site.index_title = "Welcome to Gym Management System"
-
-
-# Add this to gym_app/admin.py (before the last lines)
-

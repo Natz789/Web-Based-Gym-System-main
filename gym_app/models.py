@@ -733,3 +733,201 @@ class LoginActivity(models.Model):
     def get_recent_activity(cls, user, limit=10):
         """Get recent login activity for a user"""
         return cls.objects.filter(user=user)[:limit]
+
+
+class ChatbotConfig(models.Model):
+    """Configuration for the AI Chatbot using Ollama"""
+
+    MODEL_CHOICES = [
+        ('llama3.2:1b', 'Llama 3.2 1B (Fastest, 8GB RAM)'),
+        ('llama3.2:3b', 'Llama 3.2 3B (Balanced, 12GB RAM)'),
+        ('phi3:3.8b', 'Phi 3 3.8B (Efficient, 12GB RAM)'),
+        ('gemma2:2b', 'Gemma 2 2B (Fast, 8GB RAM)'),
+        ('mistral:7b', 'Mistral 7B (High Quality, 16GB RAM)'),
+    ]
+
+    # Singleton pattern - only one config record
+    id = models.AutoField(primary_key=True)
+
+    # Model configuration
+    active_model = models.CharField(
+        max_length=50,
+        choices=MODEL_CHOICES,
+        default='llama3.2:1b',
+        help_text="Current active Ollama model"
+    )
+
+    # Model parameters
+    temperature = models.FloatField(
+        default=0.7,
+        help_text="Creativity level (0.0-1.0). Higher = more creative"
+    )
+    top_p = models.FloatField(
+        default=0.9,
+        help_text="Nucleus sampling (0.0-1.0)"
+    )
+    max_tokens = models.IntegerField(
+        default=512,
+        help_text="Maximum response length in tokens"
+    )
+    context_window = models.IntegerField(
+        default=6,
+        help_text="Number of previous messages to keep in context"
+    )
+
+    # Feature flags
+    enable_streaming = models.BooleanField(
+        default=False,
+        help_text="Enable streaming responses (better UX)"
+    )
+    enable_persistence = models.BooleanField(
+        default=True,
+        help_text="Save conversation history to database"
+    )
+
+    # Performance settings
+    ollama_host = models.CharField(
+        max_length=200,
+        default='http://localhost:11434',
+        help_text="Ollama server URL"
+    )
+    timeout_seconds = models.IntegerField(
+        default=30,
+        help_text="Request timeout in seconds"
+    )
+
+    # Metadata
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='chatbot_config_updates'
+    )
+
+    class Meta:
+        db_table = 'chatbot_config'
+        verbose_name = 'Chatbot Configuration'
+        verbose_name_plural = 'Chatbot Configuration'
+
+    def __str__(self):
+        return f"Chatbot Config - Model: {self.get_active_model_display()}"
+
+    @classmethod
+    def get_config(cls):
+        """Get or create singleton configuration"""
+        config, created = cls.objects.get_or_create(id=1)
+        return config
+
+    def save(self, *args, **kwargs):
+        """Ensure only one config exists (singleton pattern)"""
+        self.id = 1
+        super().save(*args, **kwargs)
+
+    def get_ollama_options(self):
+        """Get formatted options for Ollama API"""
+        return {
+            'temperature': self.temperature,
+            'top_p': self.top_p,
+            'num_predict': self.max_tokens,
+        }
+
+
+class Conversation(models.Model):
+    """Persistent conversation storage for chatbot"""
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='conversations'
+    )
+    conversation_id = models.CharField(
+        max_length=100,
+        unique=True,
+        db_index=True,
+        help_text="Unique identifier for this conversation"
+    )
+    title = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="Auto-generated conversation title"
+    )
+    model_used = models.CharField(
+        max_length=50,
+        help_text="Ollama model used for this conversation"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    # Session info
+    session_key = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Session key for anonymous users"
+    )
+
+    class Meta:
+        db_table = 'conversations'
+        verbose_name = 'Conversation'
+        verbose_name_plural = 'Conversations'
+        ordering = ['-updated_at']
+        indexes = [
+            models.Index(fields=['user', '-updated_at']),
+            models.Index(fields=['conversation_id']),
+        ]
+
+    def __str__(self):
+        user_str = self.user.username if self.user else f"Anonymous ({self.session_key[:8]})"
+        return f"{user_str} - {self.title or 'Untitled'}"
+
+    def generate_title(self):
+        """Generate a title from the first message"""
+        first_message = self.messages.filter(role='user').first()
+        if first_message:
+            # Take first 50 chars of first user message
+            self.title = first_message.content[:50] + ('...' if len(first_message.content) > 50 else '')
+            self.save()
+
+
+class ConversationMessage(models.Model):
+    """Individual messages in a conversation"""
+
+    ROLE_CHOICES = [
+        ('user', 'User'),
+        ('assistant', 'Assistant'),
+        ('system', 'System'),
+    ]
+
+    conversation = models.ForeignKey(
+        Conversation,
+        on_delete=models.CASCADE,
+        related_name='messages'
+    )
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES)
+    content = models.TextField()
+
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    tokens_used = models.IntegerField(null=True, blank=True)
+    response_time_ms = models.IntegerField(
+        null=True,
+        blank=True,
+        help_text="Response generation time in milliseconds"
+    )
+
+    class Meta:
+        db_table = 'conversation_messages'
+        verbose_name = 'Conversation Message'
+        verbose_name_plural = 'Conversation Messages'
+        ordering = ['created_at']
+        indexes = [
+            models.Index(fields=['conversation', 'created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.role}: {self.content[:50]}..."
