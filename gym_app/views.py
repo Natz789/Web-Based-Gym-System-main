@@ -1691,9 +1691,17 @@ def profile_settings(request):
     # Get recent login activity
     recent_logins = LoginActivity.get_recent_activity(user, limit=10)
 
+    # Determine which base template to use based on user role
+    # Admin and staff get the left sidebar, members get the top navbar
+    if user.role in ['admin', 'staff']:
+        base_template = 'gym_app/base_sidebar.html'
+    else:
+        base_template = 'gym_app/base.html'
+
     context = {
         'user': user,
         'recent_logins': recent_logins,
+        'base_template': base_template,
     }
 
     return render(request, 'gym_app/profile_settings.html', context)
