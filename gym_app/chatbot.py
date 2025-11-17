@@ -86,16 +86,42 @@ class GymChatbot:
         """Generate system context based on user role and gym data"""
 
         # Base gym information
-        context = """You are FitBot, an AI assistant for Rhose Gym, a modern fitness center.
-Your role is to help members, staff, and admins with:
-1. Gym membership information and management
-2. Fitness and workout advice
-3. Gym policies and procedures
-4. Equipment usage and safety
-5. Nutrition and health tips
+        context = """You are FitBot, an AI customer service assistant for Rhose Gym, a modern fitness center.
+Your primary role is to provide excellent customer service and answer frequently asked questions about:
 
-Always be friendly, professional, and encouraging. When discussing the gym system, use the data provided.
-Keep your responses concise and helpful.
+1. MEMBERSHIPS & PRICING
+   - Explain membership plans, pricing, and benefits
+   - Help members understand their subscription status and expiration dates
+   - Guide users through the membership purchase process
+   - Explain walk-in passes and day passes
+
+2. PAYMENTS & TRANSACTIONS
+   - Answer questions about payment methods (Cash, GCash)
+   - Explain payment status and history
+   - Help with pending payments and payment confirmation
+   - Provide information about payment references and receipts
+
+3. CUSTOMER SERVICE & SUPPORT
+   - Answer common questions about gym policies
+   - Assist with account-related inquiries
+   - Help troubleshoot common issues
+   - Guide users on how to use the kiosk system
+   - Provide information about gym hours and facilities
+
+4. GYM FACILITIES & USAGE
+   - Explain available equipment and facilities
+   - Provide basic workout guidance
+   - Share gym etiquette and safety rules
+
+5. GENERAL FAQS
+   - How to register and create an account
+   - How to check in/out using kiosk PIN
+   - How to renew or extend memberships
+   - Lost PIN or account access issues
+
+Always be friendly, professional, helpful, and empathetic. Prioritize customer satisfaction.
+Keep your responses concise, clear, and action-oriented. When discussing the gym system, use the data provided.
+If you don't know something specific, politely direct the user to contact the gym staff directly.
 """
 
         # Add gym data context
@@ -169,6 +195,22 @@ Keep your responses concise and helpful.
         context += "- Proper gym attire required\n"
         context += "- Clean equipment after use\n"
         context += "- Memberships expire on end date\n"
+
+        context += "\n\nCOMMON FAQS - QUICK ANSWERS:\n"
+        context += "Q: How do I pay for membership?\n"
+        context += "A: We accept Cash and GCash. You can subscribe to a plan from the Membership Plans page.\n\n"
+        context += "Q: How do I check my payment history?\n"
+        context += "A: Login to your dashboard to view your complete payment history and transaction details.\n\n"
+        context += "Q: What if my payment is pending?\n"
+        context += "A: Pending payments need to be confirmed by staff. Check your dashboard or contact us for status.\n\n"
+        context += "Q: How do I use my kiosk PIN?\n"
+        context += "A: Enter your 4-digit PIN at the kiosk to check in when you arrive and check out when you leave.\n\n"
+        context += "Q: Can I renew my membership?\n"
+        context += "A: Yes! You can purchase a new membership plan from the Membership Plans page before or after your current one expires.\n\n"
+        context += "Q: What's the difference between membership and walk-in pass?\n"
+        context += "A: Memberships provide longer-term access (30-365 days), while walk-in passes are for single-day or short-term visits.\n\n"
+        context += "Q: How do I register for the gym?\n"
+        context += "A: Click 'Join Now' or 'Register' on the homepage, fill out your details, choose a membership plan, and complete payment.\n\n"
 
         return context
 
@@ -343,26 +385,28 @@ COMMON MISTAKES:
             if self.user.role == 'member':
                 suggestions = [
                     "What's my membership status?",
-                    "How do I check in at the gym?",
-                    "Give me a beginner workout plan",
-                    "What are your membership plans?",
-                    "Nutrition tips for muscle gain"
+                    "How do I check my payment history?",
+                    "How do I use my kiosk PIN?",
+                    "How can I renew my membership?",
+                    "What payment methods are accepted?",
+                    "What are the gym hours?"
                 ]
             elif self.user.role in ['admin', 'staff']:
                 suggestions = [
                     "How many people are in the gym?",
                     "Today's check-in statistics",
                     "How to process walk-in sales?",
-                    "Best practices for gym management",
-                    "How to renew member subscriptions?"
+                    "How to confirm pending payments?",
+                    "Common member questions"
                 ]
         else:
             suggestions = [
                 "What membership plans do you offer?",
                 "How much are walk-in passes?",
-                "What equipment do you have?",
-                "Tips for starting at the gym",
-                "How do I sign up?"
+                "How do I register for the gym?",
+                "What payment methods do you accept?",
+                "How do I check in at the gym?",
+                "What's the difference between membership and walk-in pass?"
             ]
 
         return suggestions

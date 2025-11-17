@@ -1366,10 +1366,10 @@ def chatbot_api(request):
         }, status=500)
 
 
-@login_required
 def chatbot_suggestions(request):
     """Get quick reply suggestions based on user context"""
-    chatbot = GymChatbot(user=request.user)
+    user = request.user if request.user.is_authenticated else None
+    chatbot = GymChatbot(user=user)
     suggestions = chatbot.get_quick_suggestions()
 
     return JsonResponse({
