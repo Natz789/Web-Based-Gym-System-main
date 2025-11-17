@@ -28,11 +28,27 @@ urlpatterns = [
     path('reports/', views.reports_view, name='reports'),
     path('audit-trail/', views.audit_trail_view, name='audit_trail'),
     path('manage-plans/', views.manage_plans_view, name='manage_plans'),
-    
+
+    # Pending Payments (staff/admin)
+    path('pending-payments/', views.pending_payments_view, name='pending_payments'),
+    path('pending-payments/confirm/<int:payment_id>/', views.confirm_payment, name='confirm_payment'),
+    path('pending-payments/reject/<int:payment_id>/', views.reject_payment, name='reject_payment'),
+
+    # Archived Plans (admin)
+    path('archived-plans/', views.archived_plans_view, name='archived_plans'),
+    path('archive-membership/<int:plan_id>/', views.archive_membership_plan, name='archive_membership_plan'),
+    path('archive-walkin/<int:plan_id>/', views.archive_walkin_plan, name='archive_walkin_plan'),
+    path('restore-membership/<int:plan_id>/', views.restore_membership_plan, name='restore_membership_plan'),
+    path('restore-walkin/<int:plan_id>/', views.restore_walkin_plan, name='restore_walkin_plan'),
+
     # Member management (admin/staff)
     path('members/', views.members_list, name='members_list'),
     path('members/<int:user_id>/', views.member_detail, name='member_detail'),
     path('create-staff/', views.create_staff_view, name='create_staff'),
+
+    # Profile Settings
+    path('profile/', views.profile_settings, name='profile_settings'),
+    path('change-password/', views.change_password, name='change_password'),
     
     # Kiosk (no authentication required)
     path('kiosk/', views.kiosk_login, name='kiosk_login'),

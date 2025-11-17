@@ -101,63 +101,114 @@ class User(AbstractUser):
 
 class MembershipPlan(models.Model):
     """Permanent membership plans (monthly, yearly, etc.)"""
-    
+
     name = models.CharField(max_length=100)
     duration_days = models.IntegerField(help_text="Duration in days")
     price = models.DecimalField(max_digits=10, decimal_places=2)
     description = models.TextField(blank=True, null=True)
     is_active = models.BooleanField(default=True)
-    
+    is_archived = models.BooleanField(default=False, help_text="Archived plans are hidden but preserved for records")
+    archived_at = models.DateTimeField(null=True, blank=True)
+    archived_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='archived_membership_plans'
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         db_table = 'membership_plans'
         verbose_name = 'Membership Plan'
         verbose_name_plural = 'Membership Plans'
         ordering = ['price']
-    
+
     def __str__(self):
         return f"{self.name} - ₱{self.price} ({self.duration_days} days)"
+
+    def archive(self, user=None):
+        """Archive this plan"""
+        self.is_archived = True
+        self.is_active = False
+        self.archived_at = timezone.now()
+        self.archived_by = user
+        self.save()
+
+    def restore(self):
+        """Restore archived plan"""
+        self.is_archived = False
+        self.is_active = True
+        self.archived_at = None
+        self.archived_by = None
+        self.save()
 
 
 class FlexibleAccess(models.Model):
     """Walk-in passes (1-day, 3-day, weekly, etc.)"""
-    
+
     name = models.CharField(max_length=100)
     duration_days = models.IntegerField(help_text="Validity in days")
     price = models.DecimalField(max_digits=10, decimal_places=2)
     description = models.TextField(blank=True, null=True)
     is_active = models.BooleanField(default=True)
-    
+    is_archived = models.BooleanField(default=False, help_text="Archived passes are hidden but preserved for records")
+    archived_at = models.DateTimeField(null=True, blank=True)
+    archived_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='archived_walk_in_plans'
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         db_table = 'flexible_access'
         verbose_name = 'Flexible Access Pass'
         verbose_name_plural = 'Flexible Access Passes'
         ordering = ['duration_days']
-    
+
     def __str__(self):
         return f"{self.name} - ₱{self.price} ({self.duration_days} days)"
+
+    def archive(self, user=None):
+        """Archive this pass"""
+        self.is_archived = True
+        self.is_active = False
+        self.archived_at = timezone.now()
+        self.archived_by = user
+        self.save()
+
+    def restore(self):
+        """Restore archived pass"""
+        self.is_archived = False
+        self.is_active = True
+        self.archived_at = None
+        self.archived_by = None
+        self.save()
 
 
 class UserMembership(models.Model):
     """Tracks member subscriptions to plans"""
-    
+
     STATUS_CHOICES = [
+        ('pending', 'Pending Payment'),
         ('active', 'Active'),
         ('expired', 'Expired'),
         ('cancelled', 'Cancelled'),
     ]
-    
+
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='memberships')
     plan = models.ForeignKey(MembershipPlan, on_delete=models.PROTECT, related_name='subscriptions')
     start_date = models.DateField()
     end_date = models.DateField()
-    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='active')
-    
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -194,64 +245,152 @@ class UserMembership(models.Model):
 
 class Payment(models.Model):
     """Payment records for registered members"""
-    
+
     PAYMENT_METHOD_CHOICES = [
         ('cash', 'Cash'),
         ('gcash', 'GCash'),
-        ('card', 'Card'),
     ]
-    
+
+    PAYMENT_STATUS_CHOICES = [
+        ('pending', 'Pending Confirmation'),
+        ('confirmed', 'Confirmed'),
+        ('rejected', 'Rejected'),
+    ]
+
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='payments')
     membership = models.ForeignKey(UserMembership, on_delete=models.CASCADE, related_name='payments')
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     method = models.CharField(max_length=10, choices=PAYMENT_METHOD_CHOICES)
     payment_date = models.DateTimeField(default=timezone.now)
-    reference_no = models.CharField(max_length=50, blank=True, null=True)
+    reference_no = models.CharField(max_length=50, blank=True, null=True, unique=True, help_text="Auto-generated payment reference")
     notes = models.TextField(blank=True, null=True)
-    
+    status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default='pending')
+
+    # Approval tracking
+    approved_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='approved_payments'
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    rejection_reason = models.TextField(blank=True, null=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         db_table = 'payments'
         verbose_name = 'Payment'
         verbose_name_plural = 'Payments'
         ordering = ['-payment_date']
-    
+
+    def save(self, *args, **kwargs):
+        """Generate unique reference number if not set"""
+        if not self.reference_no:
+            self.reference_no = self.generate_reference_number()
+        super().save(*args, **kwargs)
+
+    @staticmethod
+    def generate_reference_number():
+        """Generate unique payment reference number (format: PAY-YYYYMMDD-XXXXXX)"""
+        import random
+        from datetime import datetime
+
+        date_str = datetime.now().strftime('%Y%m%d')
+        while True:
+            random_part = ''.join([str(random.randint(0, 9)) for _ in range(6)])
+            reference = f"PAY-{date_str}-{random_part}"
+            if not Payment.objects.filter(reference_no=reference).exists():
+                return reference
+
+    def confirm(self, user):
+        """Confirm payment and activate membership"""
+        self.status = 'confirmed'
+        self.approved_by = user
+        self.approved_at = timezone.now()
+        self.save()
+
+        # Activate membership
+        if self.membership:
+            self.membership.status = 'active'
+            self.membership.save()
+
+    def reject(self, user, reason=''):
+        """Reject payment"""
+        self.status = 'rejected'
+        self.approved_by = user
+        self.approved_at = timezone.now()
+        self.rejection_reason = reason
+        self.save()
+
+        # Cancel membership if rejected
+        if self.membership:
+            self.membership.status = 'cancelled'
+            self.membership.save()
+
     def __str__(self):
-        return f"{self.user.get_full_name()} - ₱{self.amount} ({self.payment_date.strftime('%Y-%m-%d')})"
+        return f"{self.user.get_full_name()} - ₱{self.amount} ({self.reference_no})"
 
 
 class WalkInPayment(models.Model):
     """Payment records for walk-in clients (no account required)"""
-    
+
     PAYMENT_METHOD_CHOICES = [
         ('cash', 'Cash'),
         ('gcash', 'GCash'),
-        ('card', 'Card'),
     ]
-    
+
     pass_type = models.ForeignKey(FlexibleAccess, on_delete=models.PROTECT, related_name='walk_in_sales')
     customer_name = models.CharField(max_length=100, blank=True, null=True)
     mobile_no = models.CharField(max_length=20, blank=True, null=True)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     method = models.CharField(max_length=10, choices=PAYMENT_METHOD_CHOICES)
     payment_date = models.DateTimeField(default=timezone.now)
-    reference_no = models.CharField(max_length=50, blank=True, null=True)
+    reference_no = models.CharField(max_length=50, blank=True, null=True, unique=True, help_text="Auto-generated payment reference")
     notes = models.TextField(blank=True, null=True)
-    
+
+    # Track who processed this walk-in sale
+    processed_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='processed_walkin_sales'
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         db_table = 'walk_in_payments'
         verbose_name = 'Walk-in Payment'
         verbose_name_plural = 'Walk-in Payments'
         ordering = ['-payment_date']
-    
+
+    def save(self, *args, **kwargs):
+        """Generate unique reference number if not set"""
+        if not self.reference_no:
+            self.reference_no = self.generate_reference_number()
+        super().save(*args, **kwargs)
+
+    @staticmethod
+    def generate_reference_number():
+        """Generate unique walk-in payment reference number (format: WLK-YYYYMMDD-XXXXXX)"""
+        import random
+        from datetime import datetime
+
+        date_str = datetime.now().strftime('%Y%m%d')
+        while True:
+            random_part = ''.join([str(random.randint(0, 9)) for _ in range(6)])
+            reference = f"WLK-{date_str}-{random_part}"
+            if not WalkInPayment.objects.filter(reference_no=reference).exists():
+                return reference
+
     def __str__(self):
         customer = self.customer_name if self.customer_name else "Anonymous"
-        return f"{customer} - {self.pass_type.name} - ₱{self.amount}"
+        return f"{customer} - {self.pass_type.name} - ₱{self.amount} ({self.reference_no})"
 
 
 class Analytics(models.Model):
@@ -523,10 +662,68 @@ class Attendance(models.Model):
         """Get human-readable duration"""
         if not self.duration_minutes:
             return "In progress"
-        
+
         hours = self.duration_minutes // 60
         minutes = self.duration_minutes % 60
-        
+
         if hours > 0:
             return f"{hours}h {minutes}m"
         return f"{minutes}m"
+
+
+class LoginActivity(models.Model):
+    """Track user login activity for security purposes"""
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='login_activities'
+    )
+    login_time = models.DateTimeField(auto_now_add=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True, null=True)
+    success = models.BooleanField(default=True)
+    failure_reason = models.CharField(max_length=200, blank=True, null=True)
+
+    class Meta:
+        db_table = 'login_activities'
+        verbose_name = 'Login Activity'
+        verbose_name_plural = 'Login Activities'
+        ordering = ['-login_time']
+        indexes = [
+            models.Index(fields=['user', '-login_time']),
+        ]
+
+    def __str__(self):
+        status = "Success" if self.success else "Failed"
+        return f"{self.user.username} - {status} - {self.login_time.strftime('%Y-%m-%d %H:%M:%S')}"
+
+    @classmethod
+    def record_login(cls, user, request, success=True, failure_reason=None):
+        """Record a login attempt"""
+        ip_address = None
+        user_agent = None
+
+        if request:
+            # Get IP address
+            x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+            if x_forwarded_for:
+                ip_address = x_forwarded_for.split(',')[0]
+            else:
+                ip_address = request.META.get('REMOTE_ADDR')
+
+            # Get user agent
+            user_agent = request.META.get('HTTP_USER_AGENT', '')
+
+        return cls.objects.create(
+            user=user,
+            ip_address=ip_address,
+            user_agent=user_agent,
+            success=success,
+            failure_reason=failure_reason
+        )
+
+    @classmethod
+    def get_recent_activity(cls, user, limit=10):
+        """Get recent login activity for a user"""
+        return cls.objects.filter(user=user)[:limit]

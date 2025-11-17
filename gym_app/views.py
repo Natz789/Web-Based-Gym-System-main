@@ -12,8 +12,8 @@ import json
 from .chatbot import GymChatbot
 
 from .models import (
-    User, MembershipPlan, FlexibleAccess, 
-    UserMembership, Payment, WalkInPayment, Analytics, AuditLog
+    User, MembershipPlan, FlexibleAccess,
+    UserMembership, Payment, WalkInPayment, Analytics, AuditLog, LoginActivity
 )
 
 
@@ -21,10 +21,16 @@ from .models import (
 
 def home(request):
     """Homepage - displays available plans and walk-in options"""
-    # Get only ACTIVE plans and passes
-    membership_plans = MembershipPlan.objects.filter(is_active=True).order_by('price')
-    walk_in_passes = FlexibleAccess.objects.filter(is_active=True).order_by('duration_days')
-    
+    # Get only ACTIVE and NON-ARCHIVED plans and passes
+    membership_plans = MembershipPlan.objects.filter(
+        is_active=True,
+        is_archived=False
+    ).order_by('price')
+    walk_in_passes = FlexibleAccess.objects.filter(
+        is_active=True,
+        is_archived=False
+    ).order_by('duration_days')
+
     context = {
         'membership_plans': membership_plans,
         'walk_in_passes': walk_in_passes,
@@ -52,7 +58,10 @@ def login_view(request):
         
         if user is not None:
             login(request, user)
-            
+
+            # Record login activity
+            LoginActivity.record_login(user, request, success=True)
+
             # Log successful login
             AuditLog.log(
                 action='login',
@@ -61,10 +70,20 @@ def login_view(request):
                 severity='info',
                 request=request
             )
-            
+
             messages.success(request, f'Welcome back, {user.get_full_name()}!')
             return redirect('dashboard')
         else:
+            # Try to find user for failed login tracking
+            try:
+                failed_user = User.objects.get(username=username)
+                LoginActivity.record_login(
+                    failed_user, request, success=False,
+                    failure_reason='Invalid password'
+                )
+            except User.DoesNotExist:
+                pass  # User doesn't exist, can't track
+
             # Log failed login attempt
             AuditLog.log(
                 action='login_failed',
@@ -72,7 +91,7 @@ def login_view(request):
                 severity='warning',
                 request=request
             )
-            
+
             messages.error(request, 'Invalid username or password.')
     
     return render(request, 'gym_app/login.html')
@@ -335,9 +354,12 @@ def member_dashboard(request):
 @login_required
 def membership_plans_view(request):
     """View all available membership plans"""
-    # Get only ACTIVE plans
-    plans = MembershipPlan.objects.filter(is_active=True).order_by('price')
-    
+    # Get only ACTIVE and NON-ARCHIVED plans
+    plans = MembershipPlan.objects.filter(
+        is_active=True,
+        is_archived=False
+    ).order_by('price')
+
     # If member, show if they have active membership
     current_membership = None
     if request.user.role == 'member':
@@ -345,12 +367,12 @@ def membership_plans_view(request):
             user=request.user,
             status='active'
         ).first()
-    
+
     context = {
         'plans': plans,
         'current_membership': current_membership,
     }
-    
+
     return render(request, 'gym_app/membership_plans.html', context)
 
 
@@ -378,37 +400,35 @@ def subscribe_plan(request, plan_id):
     
     if request.method == 'POST':
         payment_method = request.POST.get('payment_method')
-        reference_no = request.POST.get('reference_no', '')
-        
-        # Create membership
+        notes = request.POST.get('notes', '')
+
+        # Create membership with pending status
         membership = UserMembership.objects.create(
             user=request.user,
             plan=plan,
             start_date=date.today(),
-            status='active'
+            status='pending'  # Changed to pending
         )
-        
-        # Create payment record
+
+        # Create payment record with pending status (reference_no auto-generated)
         payment = Payment.objects.create(
             user=request.user,
             membership=membership,
             amount=plan.price,
             method=payment_method,
-            reference_no=reference_no,
+            notes=notes,
+            status='pending',  # Payment needs confirmation
             payment_date=timezone.now()
         )
-        
-        # Generate kiosk PIN if user doesn't have one
-        pin_generated = False
-        if not request.user.kiosk_pin:
-            pin = request.user.generate_kiosk_pin()
-            pin_generated = True
-        
+
+        # Don't generate PIN until payment is confirmed
+        # PIN will be generated when staff/admin confirms payment
+
         # Log subscription
         AuditLog.log(
             action='membership_created',
             user=request.user,
-            description=f'Subscribed to {plan.name} - ₱{plan.price}',
+            description=f'Subscribed to {plan.name} - ₱{plan.price} (Pending confirmation)',
             severity='info',
             request=request,
             model_name='UserMembership',
@@ -417,32 +437,29 @@ def subscribe_plan(request, plan_id):
             plan_name=plan.name,
             amount=float(plan.price)
         )
-        
+
         # Log payment
         AuditLog.log(
             action='payment_received',
             user=request.user,
-            description=f'Payment received: ₱{plan.price} via {payment_method}',
+            description=f'Payment submitted: ₱{plan.price} via {payment_method} (Ref: {payment.reference_no})',
             severity='info',
             request=request,
             model_name='Payment',
             object_id=payment.id,
             object_repr=str(payment),
             amount=float(plan.price),
-            payment_method=payment_method
+            payment_method=payment_method,
+            reference_no=payment.reference_no
         )
-        
-        # Show success message with PIN if generated
-        if pin_generated:
-            messages.success(
-                request, 
-                f'Successfully subscribed to {plan.name}! '
-                f'Your kiosk PIN is: {request.user.kiosk_pin}. '
-                f'Please save this PIN to use at the attendance kiosk.'
-            )
-        else:
-            messages.success(request, f'Successfully subscribed to {plan.name}!')
-        
+
+        messages.success(
+            request,
+            f'Successfully subscribed to {plan.name}! '
+            f'Your payment reference number is: {payment.reference_no}. '
+            f'Your membership will be activated once payment is confirmed by staff.'
+        )
+
         return redirect('dashboard')
     
     context = {
@@ -1194,8 +1211,326 @@ def chatbot_suggestions(request):
     """Get quick reply suggestions based on user context"""
     chatbot = GymChatbot(user=request.user)
     suggestions = chatbot.get_quick_suggestions()
-    
+
     return JsonResponse({
         'success': True,
         'suggestions': suggestions
     })
+
+
+# ==================== Pending Payments Management ====================
+
+@login_required
+def pending_payments_view(request):
+    """View and manage pending membership payments (Staff/Admin only)"""
+    if not request.user.is_staff_or_admin():
+        messages.error(request, 'Access denied. Staff/Admin only.')
+        return redirect('dashboard')
+
+    # Get all pending payments
+    pending_payments = Payment.objects.filter(
+        status='pending'
+    ).select_related('user', 'membership__plan').order_by('-payment_date')
+
+    context = {
+        'pending_payments': pending_payments,
+    }
+
+    return render(request, 'gym_app/pending_payments.html', context)
+
+
+@login_required
+def confirm_payment(request, payment_id):
+    """Confirm a pending payment (Staff/Admin only)"""
+    if not request.user.is_staff_or_admin():
+        messages.error(request, 'Access denied.')
+        return redirect('dashboard')
+
+    payment = get_object_or_404(Payment, id=payment_id, status='pending')
+
+    if request.method == 'POST':
+        # Confirm payment
+        payment.confirm(request.user)
+
+        # Generate kiosk PIN if user doesn't have one
+        if not payment.user.kiosk_pin:
+            payment.user.generate_kiosk_pin()
+
+        # Log confirmation
+        AuditLog.log(
+            action='payment_received',
+            user=request.user,
+            description=f'Payment confirmed for {payment.user.get_full_name()} - ₱{payment.amount} (Ref: {payment.reference_no})',
+            severity='info',
+            request=request,
+            model_name='Payment',
+            object_id=payment.id,
+            object_repr=str(payment)
+        )
+
+        messages.success(
+            request,
+            f'Payment confirmed for {payment.user.get_full_name()}. '
+            f'Membership activated. Kiosk PIN: {payment.user.kiosk_pin}'
+        )
+
+        return redirect('pending_payments')
+
+    context = {
+        'payment': payment,
+    }
+
+    return render(request, 'gym_app/confirm_payment.html', context)
+
+
+@login_required
+def reject_payment(request, payment_id):
+    """Reject a pending payment (Staff/Admin only)"""
+    if not request.user.is_staff_or_admin():
+        messages.error(request, 'Access denied.')
+        return redirect('dashboard')
+
+    payment = get_object_or_404(Payment, id=payment_id, status='pending')
+
+    if request.method == 'POST':
+        reason = request.POST.get('reason', '')
+
+        # Reject payment
+        payment.reject(request.user, reason)
+
+        # Log rejection
+        AuditLog.log(
+            action='payment_refunded',
+            user=request.user,
+            description=f'Payment rejected for {payment.user.get_full_name()} - ₱{payment.amount} (Ref: {payment.reference_no}). Reason: {reason}',
+            severity='warning',
+            request=request,
+            model_name='Payment',
+            object_id=payment.id,
+            object_repr=str(payment)
+        )
+
+        messages.success(request, f'Payment rejected for {payment.user.get_full_name()}.')
+
+        return redirect('pending_payments')
+
+    context = {
+        'payment': payment,
+    }
+
+    return render(request, 'gym_app/reject_payment.html', context)
+
+
+# ==================== Archived Plans Management ====================
+
+@login_required
+def archived_plans_view(request):
+    """View archived plans (Admin only)"""
+    if not request.user.is_admin():
+        messages.error(request, 'Access denied. Admin only.')
+        return redirect('dashboard')
+
+    archived_memberships = MembershipPlan.objects.filter(
+        is_archived=True
+    ).select_related('archived_by').order_by('-archived_at')
+
+    archived_walkin = FlexibleAccess.objects.filter(
+        is_archived=True
+    ).select_related('archived_by').order_by('-archived_at')
+
+    context = {
+        'archived_memberships': archived_memberships,
+        'archived_walkin': archived_walkin,
+    }
+
+    return render(request, 'gym_app/archived_plans.html', context)
+
+
+@login_required
+def archive_membership_plan(request, plan_id):
+    """Archive a membership plan (Admin only)"""
+    if not request.user.is_admin():
+        messages.error(request, 'Access denied.')
+        return redirect('dashboard')
+
+    plan = get_object_or_404(MembershipPlan, id=plan_id)
+
+    plan.archive(request.user)
+
+    AuditLog.log(
+        action='plan_updated',
+        user=request.user,
+        description=f'Archived membership plan: {plan.name}',
+        severity='info',
+        request=request
+    )
+
+    messages.success(request, f'Membership plan "{plan.name}" archived successfully.')
+
+    return redirect('manage_plans')
+
+
+@login_required
+def archive_walkin_plan(request, plan_id):
+    """Archive a walk-in plan (Admin only)"""
+    if not request.user.is_admin():
+        messages.error(request, 'Access denied.')
+        return redirect('dashboard')
+
+    plan = get_object_or_404(FlexibleAccess, id=plan_id)
+
+    plan.archive(request.user)
+
+    AuditLog.log(
+        action='plan_updated',
+        user=request.user,
+        description=f'Archived walk-in plan: {plan.name}',
+        severity='info',
+        request=request
+    )
+
+    messages.success(request, f'Walk-in plan "{plan.name}" archived successfully.')
+
+    return redirect('manage_plans')
+
+
+@login_required
+def restore_membership_plan(request, plan_id):
+    """Restore an archived membership plan (Admin only)"""
+    if not request.user.is_admin():
+        messages.error(request, 'Access denied.')
+        return redirect('dashboard')
+
+    plan = get_object_or_404(MembershipPlan, id=plan_id, is_archived=True)
+
+    plan.restore()
+
+    AuditLog.log(
+        action='plan_updated',
+        user=request.user,
+        description=f'Restored membership plan: {plan.name}',
+        severity='info',
+        request=request
+    )
+
+    messages.success(request, f'Membership plan "{plan.name}" restored successfully.')
+
+    return redirect('archived_plans')
+
+
+@login_required
+def restore_walkin_plan(request, plan_id):
+    """Restore an archived walk-in plan (Admin only)"""
+    if not request.user.is_admin():
+        messages.error(request, 'Access denied.')
+        return redirect('dashboard')
+
+    plan = get_object_or_404(FlexibleAccess, id=plan_id, is_archived=True)
+
+    plan.restore()
+
+    AuditLog.log(
+        action='plan_updated',
+        user=request.user,
+        description=f'Restored walk-in plan: {plan.name}',
+        severity='info',
+        request=request
+    )
+
+    messages.success(request, f'Walk-in plan "{plan.name}" restored successfully.')
+
+    return redirect('archived_plans')
+
+
+# ==================== Profile Settings ====================
+
+@login_required
+def profile_settings(request):
+    """User profile settings"""
+    user = request.user
+
+    if request.method == 'POST':
+        # Update profile information
+        user.first_name = request.POST.get('first_name', user.first_name)
+        user.last_name = request.POST.get('last_name', user.last_name)
+        user.email = request.POST.get('email', user.email)
+        user.mobile_no = request.POST.get('mobile_no', user.mobile_no)
+        user.address = request.POST.get('address', user.address)
+
+        birthdate_str = request.POST.get('birthdate')
+        if birthdate_str:
+            try:
+                from datetime import datetime
+                user.birthdate = datetime.strptime(birthdate_str, '%Y-%m-%d').date()
+            except ValueError:
+                messages.error(request, 'Invalid birthdate format.')
+                return redirect('profile_settings')
+
+        user.save()
+
+        AuditLog.log(
+            action='user_updated',
+            user=user,
+            description=f'Profile updated by {user.get_full_name()}',
+            severity='info',
+            request=request
+        )
+
+        messages.success(request, 'Profile updated successfully!')
+        return redirect('profile_settings')
+
+    # Get recent login activity
+    recent_logins = LoginActivity.get_recent_activity(user, limit=10)
+
+    context = {
+        'user': user,
+        'recent_logins': recent_logins,
+    }
+
+    return render(request, 'gym_app/profile_settings.html', context)
+
+
+@login_required
+def change_password(request):
+    """Change user password"""
+    if request.method == 'POST':
+        current_password = request.POST.get('current_password')
+        new_password = request.POST.get('new_password')
+        confirm_password = request.POST.get('confirm_password')
+
+        # Validate current password
+        if not request.user.check_password(current_password):
+            messages.error(request, 'Current password is incorrect.')
+            return redirect('change_password')
+
+        # Validate new passwords match
+        if new_password != confirm_password:
+            messages.error(request, 'New passwords do not match.')
+            return redirect('change_password')
+
+        # Validate password strength (optional)
+        if len(new_password) < 8:
+            messages.error(request, 'Password must be at least 8 characters long.')
+            return redirect('change_password')
+
+        # Update password
+        request.user.set_password(new_password)
+        request.user.save()
+
+        # Log password change
+        AuditLog.log(
+            action='password_changed',
+            user=request.user,
+            description=f'Password changed by {request.user.username}',
+            severity='warning',
+            request=request
+        )
+
+        # Update session to prevent logout
+        from django.contrib.auth import update_session_auth_hash
+        update_session_auth_hash(request, request.user)
+
+        messages.success(request, 'Password changed successfully!')
+        return redirect('profile_settings')
+
+    return render(request, 'gym_app/change_password.html')
