@@ -116,58 +116,164 @@ def logout_view(request):
     return redirect('home')
 
 
-def register_view(request):
-    """Member registration"""
+def register_step1(request):
+    """Step 1: Account Information"""
     if request.user.is_authenticated:
         return redirect('dashboard')
-    
+
     if request.method == 'POST':
         username = request.POST.get('username')
         email = request.POST.get('email')
         password = request.POST.get('password')
         password_confirm = request.POST.get('password_confirm')
+
+        # Validation
+        if password != password_confirm:
+            messages.error(request, 'Passwords do not match.')
+            return render(request, 'gym_app/register_step1.html')
+
+        if User.objects.filter(username=username).exists():
+            messages.error(request, 'Username already exists.')
+            return render(request, 'gym_app/register_step1.html')
+
+        if User.objects.filter(email=email).exists():
+            messages.error(request, 'Email already registered.')
+            return render(request, 'gym_app/register_step1.html')
+
+        # Store in session
+        request.session['registration_data'] = {
+            'username': username,
+            'email': email,
+            'password': password,
+        }
+
+        return redirect('register_step2')
+
+    return render(request, 'gym_app/register_step1.html')
+
+
+def register_step2(request):
+    """Step 2: Personal Information"""
+    if request.user.is_authenticated:
+        return redirect('dashboard')
+
+    if 'registration_data' not in request.session:
+        messages.error(request, 'Please start from step 1.')
+        return redirect('register_step1')
+
+    if request.method == 'POST':
         first_name = request.POST.get('first_name')
         last_name = request.POST.get('last_name')
         mobile_no = request.POST.get('mobile_no')
         address = request.POST.get('address')
         birthdate_str = request.POST.get('birthdate')
-        
+
         # Validation
-        if password != password_confirm:
-            messages.error(request, 'Passwords do not match.')
-            return render(request, 'gym_app/register.html')
-        
-        if User.objects.filter(username=username).exists():
-            messages.error(request, 'Username already exists.')
-            return render(request, 'gym_app/register.html')
-        
-        if User.objects.filter(email=email).exists():
-            messages.error(request, 'Email already registered.')
-            return render(request, 'gym_app/register.html')
-        
-        # Convert birthdate string to date object
+        if not first_name or not last_name:
+            messages.error(request, 'First name and last name are required.')
+            return render(request, 'gym_app/register_step2.html')
+
+        # Update session data
+        request.session['registration_data'].update({
+            'first_name': first_name,
+            'last_name': last_name,
+            'mobile_no': mobile_no,
+            'address': address,
+            'birthdate': birthdate_str,
+        })
+        request.session.modified = True
+
+        return redirect('register_step3')
+
+    return render(request, 'gym_app/register_step2.html')
+
+
+def register_step3(request):
+    """Step 3: Profile Image Upload (Optional)"""
+    if request.user.is_authenticated:
+        return redirect('dashboard')
+
+    if 'registration_data' not in request.session:
+        messages.error(request, 'Please start from step 1.')
+        return redirect('register_step1')
+
+    if request.method == 'POST':
+        profile_image = request.FILES.get('profile_image')
+
+        # Store image temporarily
+        if profile_image:
+            import os
+            from django.core.files.storage import default_storage
+            from django.conf import settings
+
+            # Save to temporary location
+            temp_dir = os.path.join(settings.MEDIA_ROOT, 'temp')
+            os.makedirs(temp_dir, exist_ok=True)
+
+            temp_path = os.path.join('temp', profile_image.name)
+            saved_path = default_storage.save(temp_path, profile_image)
+
+            request.session['registration_data']['has_image'] = True
+            request.session['temp_image_path'] = saved_path
+        else:
+            request.session['registration_data']['has_image'] = False
+
+        request.session.modified = True
+        return redirect('register_review')
+
+    return render(request, 'gym_app/register_step3.html')
+
+
+def register_review(request):
+    """Step 4: Review and Confirm"""
+    if request.user.is_authenticated:
+        return redirect('dashboard')
+
+    if 'registration_data' not in request.session:
+        messages.error(request, 'Please start from step 1.')
+        return redirect('register_step1')
+
+    registration_data = request.session.get('registration_data')
+
+    if request.method == 'POST':
+        # Create user
         birthdate = None
-        if birthdate_str:
+        if registration_data.get('birthdate'):
             try:
                 from datetime import datetime
-                birthdate = datetime.strptime(birthdate_str, '%Y-%m-%d').date()
+                birthdate = datetime.strptime(registration_data['birthdate'], '%Y-%m-%d').date()
             except ValueError:
-                messages.error(request, 'Invalid birthdate format.')
-                return render(request, 'gym_app/register.html')
-        
-        # Create user
+                pass
+
         user = User.objects.create_user(
-            username=username,
-            email=email,
-            password=password,
-            first_name=first_name,
-            last_name=last_name,
-            mobile_no=mobile_no,
-            address=address,
+            username=registration_data['username'],
+            email=registration_data['email'],
+            password=registration_data['password'],
+            first_name=registration_data['first_name'],
+            last_name=registration_data['last_name'],
+            mobile_no=registration_data.get('mobile_no', ''),
+            address=registration_data.get('address', ''),
             birthdate=birthdate,
             role='member'
         )
-        
+
+        # Handle profile image from temporary storage
+        temp_image_path = request.session.get('temp_image_path')
+        if temp_image_path:
+            import os
+            from django.core.files.storage import default_storage
+            from django.core.files import File
+
+            if default_storage.exists(temp_image_path):
+                with default_storage.open(temp_image_path, 'rb') as temp_file:
+                    user.profile_image.save(
+                        os.path.basename(temp_image_path),
+                        File(temp_file),
+                        save=True
+                    )
+                # Delete temporary file
+                default_storage.delete(temp_image_path)
+
         # Log registration
         AuditLog.log(
             action='register',
@@ -176,11 +282,25 @@ def register_view(request):
             severity='info',
             request=request
         )
-        
+
+        # Clear session
+        del request.session['registration_data']
+        if 'temp_image_path' in request.session:
+            del request.session['temp_image_path']
+
         messages.success(request, 'Registration successful! Please log in.')
         return redirect('login')
-    
-    return render(request, 'gym_app/register.html')
+
+    context = {
+        'data': registration_data
+    }
+    return render(request, 'gym_app/register_review.html', context)
+
+
+# Backward compatibility - redirect old registration to step 1
+def register_view(request):
+    """Legacy registration redirect"""
+    return redirect('register_step1')
 
 
 # ==================== Dashboard Views ====================
