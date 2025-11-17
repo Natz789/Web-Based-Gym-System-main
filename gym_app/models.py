@@ -19,7 +19,13 @@ class User(AbstractUser):
     address = models.TextField(blank=True, null=True)
     birthdate = models.DateField(blank=True, null=True)
     age = models.IntegerField(blank=True, null=True)
-    
+    profile_image = models.ImageField(
+        upload_to='profile_images/',
+        blank=True,
+        null=True,
+        help_text="Profile picture"
+    )
+
 
     kiosk_pin = models.CharField(
         max_length=6, 

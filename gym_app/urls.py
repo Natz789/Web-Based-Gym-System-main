@@ -11,8 +11,12 @@ urlpatterns = [
     # Authentication
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
-    path('register/', views.register_view, name='register'),
-    
+    path('register/', views.register_view, name='register'),  # Legacy redirect
+    path('register/step1/', views.register_step1, name='register_step1'),
+    path('register/step2/', views.register_step2, name='register_step2'),
+    path('register/step3/', views.register_step3, name='register_step3'),
+    path('register/review/', views.register_review, name='register_review'),
+
     # Dashboard (role-based)
     path('dashboard/', views.dashboard, name='dashboard'),
     
