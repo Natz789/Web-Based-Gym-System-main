@@ -38,20 +38,23 @@
                     {% if user.is_staff_or_admin %}
                         <li><a href="{% url 'walkin_purchase' %}"><i class="fas fa-cash-register"></i> Walk-in</a></li>
                         <li><a href="{% url 'members_list' %}"><i class="fas fa-users"></i> Members</a></li>
+                        <li><a href="{% url 'pending_payments' %}"><i class="fas fa-clock"></i> Pending Payments</a></li>
                     {% endif %}
-                    
+
                     {% if user.is_admin %}
                         <li><a href="{% url 'reports' %}"><i class="fas fa-chart-bar"></i> Reports</a></li>
                         <li><a href="{% url 'audit_trail' %}"><i class="fas fa-history"></i> Audit Trail</a></li>
+                        <li><a href="{% url 'archived_plans' %}"><i class="fas fa-archive"></i> Archived Plans</a></li>
                         <li><a href="/admin/"><i class="fas fa-cog"></i> Admin</a></li>
                     {% endif %}
-                    
+
                     <li>
                         <span style="color: var(--gold); margin-right: 0.5rem;">
                             <i class="fas fa-user-circle"></i> {{ user.get_full_name|default:user.username }}
                             <span class="user-badge badge-{{ user.role }}">{{ user.role }}</span>
                         </span>
                     </li>
+                    <li><a href="{% url 'profile_settings' %}"><i class="fas fa-user-cog"></i> Profile</a></li>
                     <li><a href="{% url 'logout' %}"><i class="fas fa-sign-out-alt"></i> Logout</a></li>
                 {% else %}
                     <li><a href="{% url 'about' %}"><i class="fas fa-info-circle"></i> About</a></li>
