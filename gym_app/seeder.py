@@ -221,7 +221,7 @@ print(f"✓ Created {membership_count} user memberships")
 print("Creating member payments...")
 
 payment_count = 0
-payment_methods = ['cash', 'gcash', 'card']
+payment_methods = ['cash', 'gcash']
 
 for membership in UserMembership.objects.all():
     # Payment records for member memberships
