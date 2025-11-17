@@ -1,0 +1,336 @@
+{% extends 'gym_app/base_sidebar.html' %}
+
+{% block title %}Chatbot Configuration - Rhose Gym{% endblock %}
+
+{% block page_title %}AI Chatbot Configuration{% endblock %}
+
+{% block content %}
+<style>
+    .config-container {
+        max-width: 900px;
+        margin: 0 auto;
+    }
+
+    .config-card {
+        background: white;
+        border-radius: 12px;
+        padding: 30px;
+        margin-bottom: 25px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .config-card h3 {
+        color: var(--primary-blue);
+        margin-bottom: 20px;
+        font-size: 1.3rem;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .status-indicator {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 16px;
+        border-radius: 8px;
+        font-size: 0.95rem;
+        font-weight: 500;
+    }
+
+    .status-running {
+        background: #d4edda;
+        color: #155724;
+    }
+
+    .status-error {
+        background: #f8d7da;
+        color: #721c24;
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-group label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 8px;
+        color: #333;
+    }
+
+    .form-group select,
+    .form-group input {
+        width: 100%;
+        padding: 10px 15px;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        font-size: 1rem;
+    }
+
+    .form-group small {
+        display: block;
+        margin-top: 5px;
+        color: #666;
+        font-size: 0.9rem;
+    }
+
+    .checkbox-group {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .checkbox-group input[type="checkbox"] {
+        width: 20px;
+        height: 20px;
+    }
+
+    .btn-group {
+        display: flex;
+        gap: 10px;
+        margin-top: 25px;
+    }
+
+    .btn {
+        padding: 12px 24px;
+        border: none;
+        border-radius: 8px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s;
+    }
+
+    .btn-primary {
+        background: var(--primary-blue);
+        color: white;
+    }
+
+    .btn-primary:hover {
+        background: var(--accent-orange);
+    }
+
+    .btn-secondary {
+        background: #6c757d;
+        color: white;
+    }
+
+    .model-recommendations {
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 8px;
+        margin-top: 15px;
+    }
+
+    .model-recommendations h4 {
+        margin-bottom: 10px;
+        color: #333;
+        font-size: 1rem;
+    }
+
+    .model-list {
+        list-style: none;
+        padding: 0;
+    }
+
+    .model-list li {
+        padding: 8px 0;
+        border-bottom: 1px solid #dee2e6;
+    }
+
+    .model-list li:last-child {
+        border-bottom: none;
+    }
+
+    .model-name {
+        font-weight: 600;
+        color: var(--primary-blue);
+    }
+
+    .alert {
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+    }
+
+    .alert-success {
+        background: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+    }
+
+    .alert-warning {
+        background: #fff3cd;
+        color: #856404;
+        border: 1px solid #ffeaa7;
+    }
+</style>
+
+<div class="config-container">
+    <!-- Status Card -->
+    <div class="config-card">
+        <h3><i class="fas fa-server"></i> Ollama Status</h3>
+        {% if ollama_status.status == 'running' %}
+        <div class="status-indicator status-running">
+            <i class="fas fa-check-circle"></i>
+            {{ ollama_status.message }}
+        </div>
+        {% else %}
+        <div class="status-indicator status-error">
+            <i class="fas fa-exclamation-circle"></i>
+            {{ ollama_status.message }}
+        </div>
+        <div class="alert alert-warning" style="margin-top: 15px;">
+            <strong>Ollama Not Running!</strong> Please start Ollama service:
+            <br><code>ollama serve</code>
+        </div>
+        {% endif %}
+
+        {% if available_models %}
+        <div style="margin-top: 20px;">
+            <strong>Available Models:</strong>
+            <ul class="model-list">
+                {% for model in available_models %}
+                <li>
+                    <i class="fas fa-brain"></i> {{ model }}
+                    {% if model == config.active_model %}
+                    <span style="color: green; font-weight: bold;">(Active)</span>
+                    {% endif %}
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Configuration Form -->
+    <form id="config-form">
+        {% csrf_token %}
+
+        <!-- Model Selection -->
+        <div class="config-card">
+            <h3><i class="fas fa-brain"></i> Model Configuration</h3>
+
+            <div class="form-group">
+                <label for="active_model">Active Model</label>
+                <select id="active_model" name="active_model" required>
+                    {% for value, label in model_choices %}
+                    <option value="{{ value }}" {% if config.active_model == value %}selected{% endif %}>
+                        {{ label }}
+                    </option>
+                    {% endfor %}
+                </select>
+                <small>Select the Ollama model for chatbot responses. Smaller models are faster but less capable.</small>
+            </div>
+
+            <div class="model-recommendations">
+                <h4><i class="fas fa-lightbulb"></i> Recommended for E595 ThinkPad:</h4>
+                <ul class="model-list">
+                    <li><span class="model-name">llama3.2:1b</span> - Fastest (8GB RAM)</li>
+                    <li><span class="model-name">llama3.2:3b</span> - Balanced (12GB RAM)</li>
+                    <li><span class="model-name">gemma2:2b</span> - Fast alternative (8GB RAM)</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Model Parameters -->
+        <div class="config-card">
+            <h3><i class="fas fa-sliders-h"></i> Model Parameters</h3>
+
+            <div class="form-group">
+                <label for="temperature">Temperature: <span id="temp-value">{{ config.temperature }}</span></label>
+                <input type="range" id="temperature" name="temperature" min="0" max="1" step="0.1" value="{{ config.temperature }}" oninput="document.getElementById('temp-value').textContent=this.value">
+                <small>Higher values make responses more creative but less predictable. (0.0 - 1.0)</small>
+            </div>
+
+            <div class="form-group">
+                <label for="top_p">Top P: <span id="topp-value">{{ config.top_p }}</span></label>
+                <input type="range" id="top_p" name="top_p" min="0" max="1" step="0.1" value="{{ config.top_p }}" oninput="document.getElementById('topp-value').textContent=this.value">
+                <small>Controls diversity of responses. (0.0 - 1.0)</small>
+            </div>
+
+            <div class="form-group">
+                <label for="max_tokens">Max Tokens</label>
+                <input type="number" id="max_tokens" name="max_tokens" value="{{ config.max_tokens }}" min="128" max="2048" step="64">
+                <small>Maximum length of responses in tokens. Lower values = faster responses.</small>
+            </div>
+
+            <div class="form-group">
+                <label for="context_window">Context Window</label>
+                <input type="number" id="context_window" name="context_window" value="{{ config.context_window }}" min="2" max="20" step="1">
+                <small>Number of previous messages to keep in context (2-20).</small>
+            </div>
+        </div>
+
+        <!-- Features -->
+        <div class="config-card">
+            <h3><i class="fas fa-toggle-on"></i> Features</h3>
+
+            <div class="form-group">
+                <div class="checkbox-group">
+                    <input type="checkbox" id="enable_persistence" name="enable_persistence" {% if config.enable_persistence %}checked{% endif %}>
+                    <label for="enable_persistence">Enable Conversation Persistence</label>
+                </div>
+                <small>Save conversation history to database for future reference.</small>
+            </div>
+
+            <div class="form-group">
+                <div class="checkbox-group">
+                    <input type="checkbox" id="enable_streaming" name="enable_streaming" {% if config.enable_streaming %}checked{% endif %}>
+                    <label for="enable_streaming">Enable Streaming Responses (Experimental)</label>
+                </div>
+                <small>Stream responses word-by-word for better user experience.</small>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="btn-group">
+            <button type="submit" class="btn btn-primary">
+                <i class="fas fa-save"></i> Save Configuration
+            </button>
+            <button type="button" class="btn btn-secondary" onclick="window.location.reload()">
+                <i class="fas fa-undo"></i> Reset
+            </button>
+        </div>
+    </form>
+</div>
+
+<script>
+document.getElementById('config-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const formData = {
+        active_model: document.getElementById('active_model').value,
+        temperature: parseFloat(document.getElementById('temperature').value),
+        top_p: parseFloat(document.getElementById('top_p').value),
+        max_tokens: parseInt(document.getElementById('max_tokens').value),
+        context_window: parseInt(document.getElementById('context_window').value),
+        enable_persistence: document.getElementById('enable_persistence').checked,
+        enable_streaming: document.getElementById('enable_streaming').checked
+    };
+
+    try {
+        const response = await fetch('{% url "chatbot_config_update" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+            },
+            body: JSON.stringify(formData)
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            alert('Configuration updated successfully!');
+            window.location.reload();
+        } else {
+            alert('Error: ' + result.error);
+        }
+    } catch (error) {
+        alert('Failed to update configuration: ' + error.message);
+    }
+});
+</script>
+{% endblock %}
