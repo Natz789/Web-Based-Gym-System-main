@@ -24,15 +24,22 @@
             <a href="{% url 'home' %}" class="sidebar-brand">Rhose Gym</a>
         </div>
 
-        <div class="sidebar-user">
+        <a href="{% url 'profile_settings' %}" class="sidebar-user">
             <div class="sidebar-user-avatar">
-                {{ user.first_name|first|upper }}{{ user.last_name|first|upper }}
+                {% if user.profile_image %}
+                    <img src="{{ user.profile_image.url }}" alt="{{ user.get_full_name }}" class="sidebar-user-avatar-img">
+                {% else %}
+                    {{ user.first_name|first|upper }}{{ user.last_name|first|upper }}
+                {% endif %}
             </div>
             <div class="sidebar-user-name">{{ user.get_full_name|default:user.username }}</div>
             <div style="text-align: center; margin-top: 0.5rem;">
                 <span class="sidebar-user-role">{{ user.role }}</span>
             </div>
-        </div>
+            <div style="text-align: center; margin-top: 0.5rem; font-size: 0.7rem; opacity: 0.7;">
+                <i class="fas fa-cog"></i> View Profile
+            </div>
+        </a>
 
             <nav class="sidebar-menu">
             <div class="sidebar-section">Main</div>

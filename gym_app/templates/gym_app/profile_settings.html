@@ -13,12 +13,73 @@
         <h1><i class="fas fa-user-cog"></i> Profile Settings</h1>
 
         <div class="settings-grid">
+            <!-- Profile Picture Section -->
+            <div class="settings-card profile-picture-card">
+                <h2><i class="fas fa-camera"></i> Profile Picture</h2>
+
+                <div class="profile-picture-section">
+                    <div class="profile-picture-preview">
+                        {% if user.profile_image %}
+                            <img src="{{ user.profile_image.url }}" alt="Profile Picture" id="current-profile-pic">
+                        {% else %}
+                            <div class="profile-placeholder" id="current-profile-pic">
+                                <i class="fas fa-user"></i>
+                            </div>
+                        {% endif %}
+                    </div>
+
+                    <div class="profile-picture-actions">
+                        <!-- Upload/Change Picture Form -->
+                        <form method="POST" enctype="multipart/form-data" id="upload-picture-form">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="update_profile_picture">
+
+                            <div class="file-upload-wrapper">
+                                <input type="file" id="profile_image" name="profile_image"
+                                       accept="image/*" class="file-input" onchange="previewImage(this)">
+                                <label for="profile_image" class="btn btn-primary">
+                                    <i class="fas fa-upload"></i>
+                                    {% if user.profile_image %}Change Picture{% else %}Upload Picture{% endif %}
+                                </label>
+                            </div>
+
+                            <button type="submit" class="btn btn-success" id="save-picture-btn" style="display: none;">
+                                <i class="fas fa-check"></i> Save Picture
+                            </button>
+                        </form>
+
+                        <!-- Remove Picture Form -->
+                        {% if user.profile_image %}
+                        <form method="POST" style="margin-top: 1rem;">
+                            {% csrf_token %}
+                            <input type="hidden" name="action" value="remove_profile_picture">
+                            <button type="submit" class="btn btn-danger"
+                                    onclick="return confirm('Are you sure you want to remove your profile picture?')">
+                                <i class="fas fa-trash"></i> Remove Picture
+                            </button>
+                        </form>
+                        {% endif %}
+                    </div>
+
+                    <div class="picture-guidelines">
+                        <p><i class="fas fa-info-circle"></i> <strong>Guidelines:</strong></p>
+                        <ul>
+                            <li>Recommended size: 400x400 pixels</li>
+                            <li>Accepted formats: JPG, PNG, GIF</li>
+                            <li>Maximum file size: 5MB</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
             <!-- Profile Information -->
             <div class="settings-card">
                 <h2><i class="fas fa-user"></i> Personal Information</h2>
 
                 <form method="POST">
                     {% csrf_token %}
+                    <input type="hidden" name="action" value="update_profile">
+
                     <div class="form-group">
                         <label for="first_name">First Name</label>
                         <input type="text" id="first_name" name="first_name"
@@ -266,10 +327,170 @@
     font-style: italic;
 }
 
+/* Profile Picture Styles */
+.profile-picture-card {
+    grid-column: 1 / -1;
+}
+
+.profile-picture-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2rem;
+}
+
+.profile-picture-preview {
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 4px solid var(--primary);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+
+.profile-picture-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.profile-placeholder {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 5rem;
+    color: white;
+}
+
+.profile-picture-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    width: 100%;
+    max-width: 400px;
+}
+
+.file-upload-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.file-input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.file-upload-wrapper label {
+    display: block;
+    width: 100%;
+    text-align: center;
+    cursor: pointer;
+}
+
+.picture-guidelines {
+    background: #f0f9ff;
+    border-left: 4px solid #3b82f6;
+    padding: 1rem 1.5rem;
+    border-radius: 6px;
+    width: 100%;
+    max-width: 500px;
+}
+
+.picture-guidelines p {
+    margin: 0 0 0.5rem 0;
+    color: #1e40af;
+}
+
+.picture-guidelines ul {
+    margin: 0;
+    padding-left: 1.5rem;
+    color: #64748b;
+}
+
+.picture-guidelines li {
+    margin: 0.25rem 0;
+    font-size: 0.9rem;
+}
+
+.btn-success {
+    background: #10b981;
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background 0.2s;
+    width: 100%;
+}
+
+.btn-success:hover {
+    background: #059669;
+}
+
+.btn-danger {
+    background: #ef4444;
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background 0.2s;
+    width: 100%;
+}
+
+.btn-danger:hover {
+    background: #dc2626;
+}
+
 @media (max-width: 768px) {
     .settings-grid {
         grid-template-columns: 1fr;
     }
+
+    .profile-picture-preview {
+        width: 150px;
+        height: 150px;
+    }
+
+    .profile-placeholder {
+        font-size: 3.5rem;
+    }
 }
 </style>
+
+<script>
+function previewImage(input) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+
+        reader.onload = function(e) {
+            const preview = document.getElementById('current-profile-pic');
+
+            if (preview.tagName === 'IMG') {
+                preview.src = e.target.result;
+            } else {
+                // Replace placeholder with image
+                const img = document.createElement('img');
+                img.src = e.target.result;
+                img.alt = 'Profile Picture Preview';
+                img.id = 'current-profile-pic';
+                preview.parentNode.replaceChild(img, preview);
+            }
+
+            // Show save button
+            document.getElementById('save-picture-btn').style.display = 'block';
+        }
+
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+</script>
 {% endblock %}

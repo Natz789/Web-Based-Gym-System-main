@@ -9,6 +9,7 @@ from decimal import Decimal
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 import json
+import os
 from .chatbot import GymChatbot
 
 from .models import (
@@ -1602,34 +1603,90 @@ def profile_settings(request):
     user = request.user
 
     if request.method == 'POST':
-        # Update profile information
-        user.first_name = request.POST.get('first_name', user.first_name)
-        user.last_name = request.POST.get('last_name', user.last_name)
-        user.email = request.POST.get('email', user.email)
-        user.mobile_no = request.POST.get('mobile_no', user.mobile_no)
-        user.address = request.POST.get('address', user.address)
+        action = request.POST.get('action', 'update_profile')
 
-        birthdate_str = request.POST.get('birthdate')
-        if birthdate_str:
-            try:
-                from datetime import datetime
-                user.birthdate = datetime.strptime(birthdate_str, '%Y-%m-%d').date()
-            except ValueError:
-                messages.error(request, 'Invalid birthdate format.')
-                return redirect('profile_settings')
+        if action == 'update_profile':
+            # Update profile information
+            user.first_name = request.POST.get('first_name', user.first_name)
+            user.last_name = request.POST.get('last_name', user.last_name)
+            user.email = request.POST.get('email', user.email)
+            user.mobile_no = request.POST.get('mobile_no', user.mobile_no)
+            user.address = request.POST.get('address', user.address)
 
-        user.save()
+            birthdate_str = request.POST.get('birthdate')
+            if birthdate_str:
+                try:
+                    from datetime import datetime
+                    user.birthdate = datetime.strptime(birthdate_str, '%Y-%m-%d').date()
+                except ValueError:
+                    messages.error(request, 'Invalid birthdate format.')
+                    return redirect('profile_settings')
 
-        AuditLog.log(
-            action='user_updated',
-            user=user,
-            description=f'Profile updated by {user.get_full_name()}',
-            severity='info',
-            request=request
-        )
+            user.save()
 
-        messages.success(request, 'Profile updated successfully!')
-        return redirect('profile_settings')
+            AuditLog.log(
+                action='user_updated',
+                user=user,
+                description=f'Profile updated by {user.get_full_name()}',
+                severity='info',
+                request=request
+            )
+
+            messages.success(request, 'Profile updated successfully!')
+            return redirect('profile_settings')
+
+        elif action == 'update_profile_picture':
+            # Handle profile picture upload
+            profile_image = request.FILES.get('profile_image')
+
+            if profile_image:
+                # Delete old profile image if exists
+                if user.profile_image:
+                    old_image_path = user.profile_image.path
+                    if os.path.exists(old_image_path):
+                        os.remove(old_image_path)
+
+                # Save new profile image
+                user.profile_image = profile_image
+                user.save()
+
+                AuditLog.log(
+                    action='profile_picture_updated',
+                    user=user,
+                    description=f'Profile picture updated by {user.get_full_name()}',
+                    severity='info',
+                    request=request
+                )
+
+                messages.success(request, 'Profile picture updated successfully!')
+            else:
+                messages.error(request, 'Please select an image file.')
+
+            return redirect('profile_settings')
+
+        elif action == 'remove_profile_picture':
+            # Remove profile picture
+            if user.profile_image:
+                old_image_path = user.profile_image.path
+                if os.path.exists(old_image_path):
+                    os.remove(old_image_path)
+
+                user.profile_image = None
+                user.save()
+
+                AuditLog.log(
+                    action='profile_picture_removed',
+                    user=user,
+                    description=f'Profile picture removed by {user.get_full_name()}',
+                    severity='info',
+                    request=request
+                )
+
+                messages.success(request, 'Profile picture removed successfully!')
+            else:
+                messages.error(request, 'No profile picture to remove.')
+
+            return redirect('profile_settings')
 
     # Get recent login activity
     recent_logins = LoginActivity.get_recent_activity(user, limit=10)

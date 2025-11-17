@@ -83,6 +83,14 @@
         padding: 1.5rem;
         background: rgba(255, 255, 255, 0.05);
         border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        text-decoration: none;
+        color: inherit;
+        display: block;
+        transition: background 0.3s ease;
+    }
+
+    .sidebar-user:hover {
+        background: rgba(255, 255, 255, 0.1);
     }
 
     .sidebar-user-avatar {
@@ -97,6 +105,13 @@
         font-weight: 700;
         color: var(--primary-blue);
         margin: 0 auto 0.75rem;
+        overflow: hidden;
+    }
+
+    .sidebar-user-avatar-img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
     }
 
     .sidebar-user-name {
