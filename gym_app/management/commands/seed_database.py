@@ -35,14 +35,14 @@ class Command(BaseCommand):
         parser.add_argument(
             '--users',
             type=int,
-            default=30,
-            help='Number of member users to create (default: 30)'
+            default=100,
+            help='Number of member users to create (default: 100)'
         )
         parser.add_argument(
             '--days',
             type=int,
-            default=60,
-            help='Number of days of historical data to generate (default: 60)'
+            default=90,
+            help='Number of days of historical data to generate (default: 90)'
         )
         parser.add_argument(
             '--flush',
@@ -126,34 +126,34 @@ class Command(BaseCommand):
                 'role': 'admin',
                 'is_staff': True,
                 'is_superuser': False,
+            },
+            {
+                'username': 'director',
+                'email': 'director@gym.com',
+                'first_name': 'Patricia',
+                'last_name': 'Director',
+                'role': 'admin',
+                'is_staff': True,
+                'is_superuser': False,
             }
         ]
 
         staff_data = [
-            {
-                'username': 'staff1',
-                'email': 'sarah.staff@gym.com',
-                'first_name': 'Sarah',
-                'last_name': 'Johnson',
-                'role': 'staff',
-                'mobile_no': '09171234567',
-            },
-            {
-                'username': 'staff2',
-                'email': 'mike.staff@gym.com',
-                'first_name': 'Mike',
-                'last_name': 'Williams',
-                'role': 'staff',
-                'mobile_no': '09181234567',
-            },
-            {
-                'username': 'staff3',
-                'email': 'lisa.staff@gym.com',
-                'first_name': 'Lisa',
-                'last_name': 'Martinez',
-                'role': 'staff',
-                'mobile_no': '09191234567',
-            }
+            {'username': 'staff1', 'email': 'sarah.johnson@gym.com', 'first_name': 'Sarah', 'last_name': 'Johnson', 'role': 'staff', 'mobile_no': '09171234567'},
+            {'username': 'staff2', 'email': 'mike.williams@gym.com', 'first_name': 'Mike', 'last_name': 'Williams', 'role': 'staff', 'mobile_no': '09181234567'},
+            {'username': 'staff3', 'email': 'lisa.martinez@gym.com', 'first_name': 'Lisa', 'last_name': 'Martinez', 'role': 'staff', 'mobile_no': '09191234567'},
+            {'username': 'staff4', 'email': 'david.garcia@gym.com', 'first_name': 'David', 'last_name': 'Garcia', 'role': 'staff', 'mobile_no': '09201234567'},
+            {'username': 'staff5', 'email': 'emma.rodriguez@gym.com', 'first_name': 'Emma', 'last_name': 'Rodriguez', 'role': 'staff', 'mobile_no': '09211234567'},
+            {'username': 'staff6', 'email': 'james.lopez@gym.com', 'first_name': 'James', 'last_name': 'Lopez', 'role': 'staff', 'mobile_no': '09221234567'},
+            {'username': 'staff7', 'email': 'sophia.hernandez@gym.com', 'first_name': 'Sophia', 'last_name': 'Hernandez', 'role': 'staff', 'mobile_no': '09231234567'},
+            {'username': 'staff8', 'email': 'robert.gonzalez@gym.com', 'first_name': 'Robert', 'last_name': 'Gonzalez', 'role': 'staff', 'mobile_no': '09241234567'},
+            {'username': 'staff9', 'email': 'olivia.perez@gym.com', 'first_name': 'Olivia', 'last_name': 'Perez', 'role': 'staff', 'mobile_no': '09251234567'},
+            {'username': 'staff10', 'email': 'william.sanchez@gym.com', 'first_name': 'William', 'last_name': 'Sanchez', 'role': 'staff', 'mobile_no': '09261234567'},
+            {'username': 'staff11', 'email': 'ava.ramirez@gym.com', 'first_name': 'Ava', 'last_name': 'Ramirez', 'role': 'staff', 'mobile_no': '09271234567'},
+            {'username': 'staff12', 'email': 'alexander.torres@gym.com', 'first_name': 'Alexander', 'last_name': 'Torres', 'role': 'staff', 'mobile_no': '09281234567'},
+            {'username': 'staff13', 'email': 'isabella.flores@gym.com', 'first_name': 'Isabella', 'last_name': 'Flores', 'role': 'staff', 'mobile_no': '09291234567'},
+            {'username': 'staff14', 'email': 'daniel.rivera@gym.com', 'first_name': 'Daniel', 'last_name': 'Rivera', 'role': 'staff', 'mobile_no': '09301234567'},
+            {'username': 'staff15', 'email': 'mia.cruz@gym.com', 'first_name': 'Mia', 'last_name': 'Cruz', 'role': 'staff', 'mobile_no': '09311234567'},
         ]
 
         for data in admin_data:
@@ -394,16 +394,27 @@ class Command(BaseCommand):
         self.stdout.write(f'   ℹ Cancelled: {UserMembership.objects.filter(status="cancelled").count()}\n')
 
     def create_payments(self):
-        """Create payment records for memberships"""
+        """Create payment records for memberships with varied statuses"""
         self.stdout.write(self.style.SUCCESS('💰 Creating Payment Records...\n'))
 
         memberships = UserMembership.objects.all()
-        payment_methods = ['cash', 'gcash', 'card']
+        payment_methods = ['cash', 'gcash']
+        staff_users = list(User.objects.filter(role__in=['admin', 'staff']))
 
         created_count = 0
+        pending_count = 0
+        confirmed_count = 0
+        rejected_count = 0
+
         for membership in memberships:
             # Only create payments for non-cancelled memberships
             if membership.status != 'cancelled':
+                # Determine payment status (70% confirmed, 20% pending, 10% rejected)
+                status_choice = random.choices(
+                    ['confirmed', 'pending', 'rejected'],
+                    weights=[70, 20, 10]
+                )[0]
+
                 payment, created = Payment.objects.get_or_create(
                     user=membership.user,
                     membership=membership,
@@ -412,21 +423,46 @@ class Command(BaseCommand):
                         'method': random.choice(payment_methods),
                         'payment_date': timezone.make_aware(
                             datetime.combine(membership.start_date, datetime.min.time())
+                            + timedelta(hours=random.randint(8, 18), minutes=random.randint(0, 59))
                         ),
-                        'reference_no': f'REF-{random.randint(100000, 999999)}' if random.random() < 0.7 else None,
+                        'status': status_choice,
                         'notes': random.choice([
-                            'Payment received in full',
-                            'Online payment - confirmed',
+                            'Payment via GCash',
                             'Cash payment at counter',
+                            'Online payment received',
+                            'Bank transfer completed',
                             None, None  # More likely to have no notes
                         ])
                     }
                 )
 
                 if created:
+                    # Update payment based on status
+                    if status_choice == 'confirmed' and staff_users:
+                        payment.approved_by = random.choice(staff_users)
+                        payment.approved_at = payment.payment_date + timedelta(hours=random.randint(1, 24))
+                        payment.save()
+                        confirmed_count += 1
+                    elif status_choice == 'rejected' and staff_users:
+                        payment.approved_by = random.choice(staff_users)
+                        payment.approved_at = payment.payment_date + timedelta(hours=random.randint(1, 48))
+                        payment.rejection_reason = random.choice([
+                            'Invalid reference number',
+                            'Payment amount mismatch',
+                            'Duplicate payment submission',
+                            'Requested by customer'
+                        ])
+                        payment.save()
+                        rejected_count += 1
+                    elif status_choice == 'pending':
+                        pending_count += 1
+
                     created_count += 1
 
-        self.stdout.write(f'   ✓ Created {created_count} payment records\n')
+        self.stdout.write(f'   ✓ Created {created_count} payment records')
+        self.stdout.write(f'   ℹ Confirmed: {confirmed_count}')
+        self.stdout.write(f'   ℹ Pending: {pending_count}')
+        self.stdout.write(f'   ℹ Rejected: {rejected_count}\n')
 
     def create_walk_in_payments(self, days_back):
         """Create walk-in payment records"""
@@ -437,7 +473,8 @@ class Command(BaseCommand):
             self.stdout.write(self.style.ERROR('   ✗ No flexible access passes found!\n'))
             return
 
-        payment_methods = ['cash', 'gcash', 'card']
+        staff_users = list(User.objects.filter(role__in=['admin', 'staff']))
+        payment_methods = ['cash', 'gcash']
 
         # Generate 2-8 walk-in payments per day
         created_count = 0
@@ -450,7 +487,7 @@ class Command(BaseCommand):
 
                 # 60% provide name, 40% anonymous
                 if random.random() < 0.6:
-                    customer_name = f'{random.choice(["John", "Jane", "Mark", "Sarah", "Mike", "Lisa"])} {random.choice(["Doe", "Smith", "Johnson", "Williams"])}'
+                    customer_name = f'{random.choice(["John", "Jane", "Mark", "Sarah", "Mike", "Lisa", "Alex", "Chris", "Taylor", "Jordan"])} {random.choice(["Doe", "Smith", "Johnson", "Williams", "Brown", "Davis", "Wilson"])}'
                     mobile_no = f'09{random.randint(100000000, 999999999)}'
                 else:
                     customer_name = None
@@ -473,7 +510,7 @@ class Command(BaseCommand):
                     amount=pass_type.price,
                     method=random.choice(payment_methods),
                     payment_date=payment_datetime,
-                    reference_no=f'WI-{random.randint(100000, 999999)}' if random.random() < 0.5 else None,
+                    processed_by=random.choice(staff_users) if staff_users else None,
                 )
                 created_count += 1
 
@@ -594,7 +631,11 @@ class Command(BaseCommand):
             ('   ├─ Expired', UserMembership.objects.filter(status='expired').count()),
             ('   └─ Cancelled', UserMembership.objects.filter(status='cancelled').count()),
             ('', ''),
-            ('💰 Payments', Payment.objects.count()),
+            ('💰 Member Payments', Payment.objects.count()),
+            ('   ├─ Confirmed', Payment.objects.filter(status='confirmed').count()),
+            ('   ├─ Pending', Payment.objects.filter(status='pending').count()),
+            ('   └─ Rejected', Payment.objects.filter(status='rejected').count()),
+            ('', ''),
             ('🚶 Walk-in Payments', WalkInPayment.objects.count()),
             ('📊 Attendance Records', Attendance.objects.count()),
             ('📈 Analytics Records', Analytics.objects.count()),
