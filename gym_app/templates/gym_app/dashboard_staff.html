@@ -48,6 +48,18 @@
 
 <!-- Quick Actions -->
 <div class="stats-grid">
+    <a href="{% url 'pending_payments' %}" class="stat-card" style="text-decoration: none; color: inherit; border: 2px solid #f59e0b;">
+        <div class="stat-icon" style="background: #f59e0b;">
+            <i class="fas fa-tasks"></i>
+        </div>
+        <div class="stat-info">
+            <p style="margin: 0; font-size: 1.1rem; font-weight: 600;">Pending Payments</p>
+            {% if pending_payments %}
+            <span class="badge badge-warning" style="margin-top: 0.5rem;">{{ pending_payments.count }} pending</span>
+            {% endif %}
+        </div>
+    </a>
+
     <a href="{% url 'walkin_purchase' %}" class="stat-card" style="text-decoration: none; color: inherit;">
         <div class="stat-icon blue">
             <i class="fas fa-cash-register"></i>
@@ -65,6 +77,69 @@
             <p style="margin: 0; font-size: 1.1rem; font-weight: 600;">View All Members</p>
         </div>
     </a>
+
+    <a href="{% url 'attendance_report' %}" class="stat-card" style="text-decoration: none; color: inherit;">
+        <div class="stat-icon" style="background: #8b5cf6;">
+            <i class="fas fa-clipboard-list"></i>
+        </div>
+        <div class="stat-info">
+            <p style="margin: 0; font-size: 1.1rem; font-weight: 600;">Attendance</p>
+        </div>
+    </a>
+</div>
+
+<!-- Pending Payments - IMPORTANT -->
+<div class="table-container" style="border: 2px solid #f59e0b;">
+    <h2 class="section-title" style="color: #f59e0b;">
+        <i class="fas fa-exclamation-circle"></i>
+        Pending Payment Approvals
+        {% if pending_payments %}
+        <span class="badge badge-warning" style="margin-left: 1rem;">{{ pending_payments.count }} Pending</span>
+        {% endif %}
+    </h2>
+    {% if pending_payments %}
+    <table>
+        <thead>
+            <tr>
+                <th>Reference No.</th>
+                <th>Member</th>
+                <th>Plan</th>
+                <th>Amount</th>
+                <th>Method</th>
+                <th>Submitted</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for payment in pending_payments %}
+            <tr style="background: #fffbeb;">
+                <td><strong>{{ payment.reference_no }}</strong></td>
+                <td><strong>{{ payment.user.get_full_name }}</strong></td>
+                <td>{{ payment.membership.plan.name }}</td>
+                <td><strong>₱{{ payment.amount }}</strong></td>
+                <td><span class="badge badge-warning">{{ payment.method|upper }}</span></td>
+                <td>{{ payment.payment_date|date:"M d, Y H:i" }}</td>
+                <td>
+                    <a href="{% url 'confirm_payment' payment.id %}" class="btn-action btn-success" title="Confirm Payment">
+                        <i class="fas fa-check"></i>
+                    </a>
+                    <a href="{% url 'reject_payment' payment.id %}" class="btn-action btn-danger" title="Reject Payment">
+                        <i class="fas fa-times"></i>
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <div style="text-align: center; margin-top: 1rem;">
+        <a href="{% url 'pending_payments' %}" class="btn-link">View All Pending Payments →</a>
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <i class="fas fa-check-circle"></i>
+        <p>No pending payments to review</p>
+    </div>
+    {% endif %}
 </div>
 
 <!-- Recent Member Payments -->
@@ -203,5 +278,64 @@
     </div>
     {% endif %}
 </div>
+
+<style>
+.btn-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    text-decoration: none;
+    margin: 0 0.25rem;
+    transition: all 0.2s;
+}
+
+.btn-action i {
+    font-size: 0.9rem;
+}
+
+.btn-success {
+    background: #10b981;
+    color: white;
+}
+
+.btn-success:hover {
+    background: #059669;
+    transform: translateY(-2px);
+}
+
+.btn-danger {
+    background: #ef4444;
+    color: white;
+}
+
+.btn-danger:hover {
+    background: #dc2626;
+    transform: translateY(-2px);
+}
+
+.btn-link {
+    color: var(--secondary-blue);
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s;
+}
+
+.btn-link:hover {
+    color: var(--primary-blue);
+    text-decoration: underline;
+}
+
+.badge-warning {
+    background: #f59e0b;
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+</style>
 
 {% endblock %}

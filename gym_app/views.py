@@ -205,62 +205,85 @@ def admin_dashboard(request):
     if not request.user.is_admin():
         messages.error(request, 'Access denied.')
         return redirect('dashboard')
-    
+
     # Get today's stats
     today = date.today()
-    
+
     # Active memberships
     active_memberships = UserMembership.objects.filter(
         status='active',
         end_date__gte=today
     ).count()
-    
+
     # Total members
     total_members = User.objects.filter(role='member').count()
-    
+
     # Today's revenue
     today_member_sales = Payment.objects.filter(
         payment_date__date=today
     ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-    
+
     today_walkin_sales = WalkInPayment.objects.filter(
         payment_date__date=today
     ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-    
+
     today_revenue = today_member_sales + today_walkin_sales
-    
+
     # This month's revenue
     month_start = today.replace(day=1)
     month_member_sales = Payment.objects.filter(
         payment_date__date__gte=month_start
     ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-    
+
     month_walkin_sales = WalkInPayment.objects.filter(
         payment_date__date__gte=month_start
     ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-    
+
     month_revenue = month_member_sales + month_walkin_sales
-    
-    # Recent payments
-    recent_payments = Payment.objects.select_related('user', 'membership__plan')[:10]
-    recent_walkins = WalkInPayment.objects.select_related('pass_type')[:10]
-    
+
+    # Pending payments - IMPORTANT for admin to review
+    pending_payments = Payment.objects.filter(
+        status='pending'
+    ).select_related('user', 'membership__plan').order_by('-payment_date')[:10]
+
+    # New member registrations (last 7 days)
+    seven_days_ago = today - timedelta(days=7)
+    new_members = User.objects.filter(
+        role='member',
+        date_joined__gte=seven_days_ago
+    ).prefetch_related('usermembership_set').order_by('-date_joined')[:10]
+
+    # Recent payments (confirmed only)
+    recent_payments = Payment.objects.filter(
+        status='confirmed'
+    ).select_related('user', 'membership__plan').order_by('-payment_date')[:10]
+
+    recent_walkins = WalkInPayment.objects.select_related('pass_type').order_by('-payment_date')[:10]
+
     # Expiring soon (next 7 days)
     expiring_soon = UserMembership.objects.filter(
         status='active',
         end_date__range=[today, today + timedelta(days=7)]
-    ).select_related('user', 'plan')[:10]
-    
+    ).select_related('user', 'plan').order_by('end_date')[:10]
+
+    # Recent staff activity (from audit log)
+    recent_staff_activity = AuditLog.objects.filter(
+        user__role__in=['admin', 'staff']
+    ).select_related('user').order_by('-timestamp')[:10]
+
     context = {
         'active_memberships': active_memberships,
         'total_members': total_members,
         'today_revenue': today_revenue,
         'month_revenue': month_revenue,
+        'pending_payments': pending_payments,
+        'new_members': new_members,
         'recent_payments': recent_payments,
         'recent_walkins': recent_walkins,
         'expiring_soon': expiring_soon,
+        'recent_staff_activity': recent_staff_activity,
     }
-    
+
     return render(request, 'gym_app/dashboard_admin.html', context)
 
 
@@ -270,52 +293,61 @@ def staff_dashboard(request):
     if not request.user.is_staff_or_admin():
         messages.error(request, 'Access denied.')
         return redirect('dashboard')
-    
+
     today = date.today()
-    
+
     # Today's transactions
     today_payments = Payment.objects.filter(
         payment_date__date=today
     ).count()
-    
+
     today_walkins = WalkInPayment.objects.filter(
         payment_date__date=today
     ).count()
-    
+
     # Today's revenue
     today_member_sales = Payment.objects.filter(
         payment_date__date=today
     ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-    
+
     today_walkin_sales = WalkInPayment.objects.filter(
         payment_date__date=today
     ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-    
+
     today_revenue = today_member_sales + today_walkin_sales
-    
-    # Recent activity
-    recent_payments = Payment.objects.select_related('user', 'membership__plan')[:10]
-    recent_walkins = WalkInPayment.objects.select_related('pass_type')[:10]
-    
+
+    # Pending payments - IMPORTANT for staff to review
+    pending_payments = Payment.objects.filter(
+        status='pending'
+    ).select_related('user', 'membership__plan').order_by('-payment_date')[:10]
+
+    # Recent activity (confirmed payments only)
+    recent_payments = Payment.objects.filter(
+        status='confirmed'
+    ).select_related('user', 'membership__plan').order_by('-payment_date')[:10]
+
+    recent_walkins = WalkInPayment.objects.select_related('pass_type').order_by('-payment_date')[:10]
+
     # Expiring soon
     expiring_soon = UserMembership.objects.filter(
         status='active',
         end_date__range=[today, today + timedelta(days=7)]
-    ).select_related('user', 'plan')[:10]
-    
+    ).select_related('user', 'plan').order_by('end_date')[:10]
+
     # Available membership plans
     membership_plans = MembershipPlan.objects.filter(is_active=True)
-    
+
     context = {
         'today_payments': today_payments,
         'today_walkins': today_walkins,
         'today_revenue': today_revenue,
+        'pending_payments': pending_payments,
         'recent_payments': recent_payments,
         'recent_walkins': recent_walkins,
         'expiring_soon': expiring_soon,
         'membership_plans': membership_plans,
     }
-    
+
     return render(request, 'gym_app/dashboard_staff.html', context)
 
 
