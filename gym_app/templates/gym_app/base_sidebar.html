@@ -42,6 +42,10 @@
             </a>
 
             <div class="sidebar-section">Operations</div>
+            <a href="{% url 'pending_payments' %}" {% if 'pending-payments' in request.path %}class="active"{% endif %}>
+                <i class="fas fa-clock"></i>
+                <span>Pending Payments</span>
+            </a>
             <a href="{% url 'walkin_purchase' %}" {% if 'walkin' in request.path %}class="active"{% endif %}>
                 <i class="fas fa-cash-register"></i>
                 <span>Walk-in Sales</span>
@@ -74,6 +78,10 @@
             <a href="{% url 'audit_trail' %}" {% if 'audit' in request.path %}class="active"{% endif %}>
                 <i class="fas fa-history"></i>
                 <span>Audit Trail</span>
+            </a>
+            <a href="{% url 'archived_plans' %}" {% if 'archived-plans' in request.path %}class="active"{% endif %}>
+                <i class="fas fa-archive"></i>
+                <span>Archived Plans</span>
             </a>
             <a href="/admin/" target="_blank">
                 <i class="fas fa-cog"></i>

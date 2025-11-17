@@ -135,8 +135,8 @@
                 <td>{{ member.mobile_no|default:"N/A" }}</td>
                 <td>{{ member.date_joined|date:"M d, Y" }}</td>
                 <td>
-                    {% if member.usermembership_set.filter.count > 0 %}
-                    <span class="badge badge-active">Active</span>
+                    {% if member.memberships.all %}
+                    <span class="badge badge-active">Has Membership</span>
                     {% else %}
                     <span class="badge badge-inactive">No Membership</span>
                     {% endif %}
