@@ -1,0 +1,185 @@
+ .dashboard-header {
+        background: linear-gradient(135deg, var(--success) 0%, #059669 100%);
+        color: var(--white);
+        padding: 2rem;
+        border-radius: 15px;
+        margin-bottom: 2rem;
+    }
+
+    .dashboard-header h1 {
+        font-size: 2.5rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .membership-card {
+        background: var(--white);
+        border-radius: 15px;
+        padding: 2rem;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        margin-bottom: 2rem;
+    }
+
+    .membership-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+        padding-bottom: 1rem;
+        border-bottom: 2px solid var(--light-bg);
+    }
+
+    .membership-status {
+        display: inline-block;
+        padding: 0.5rem 1.5rem;
+        border-radius: 25px;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .status-active {
+        background-color: #d1fae5;
+        color: var(--success);
+    }
+
+    .status-expired {
+        background-color: #fee2e2;
+        color: var(--danger);
+    }
+
+    .membership-details {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1.5rem;
+    }
+
+    .detail-item {
+        text-align: center;
+        padding: 1rem;
+        background-color: var(--light-bg);
+        border-radius: 10px;
+    }
+
+    .detail-label {
+        color: var(--gray);
+        font-size: 0.875rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .detail-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--primary-blue);
+    }
+
+    .no-membership {
+        text-align: center;
+        padding: 3rem;
+        background: linear-gradient(135deg, var(--light-bg) 0%, var(--white) 100%);
+        border-radius: 15px;
+        margin-bottom: 2rem;
+    }
+
+    .no-membership i {
+        font-size: 5rem;
+        color: var(--gold);
+        margin-bottom: 1rem;
+    }
+
+    .no-membership h2 {
+        color: var(--primary-blue);
+        margin-bottom: 1rem;
+    }
+
+    .section-title {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--primary-blue);
+        margin-bottom: 1.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .table-container {
+        background: var(--white);
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+        margin-bottom: 2rem;
+        overflow-x: auto;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    table thead {
+        background-color: var(--light-bg);
+    }
+
+    table th {
+        padding: 1rem;
+        text-align: left;
+        font-weight: 600;
+        color: var(--primary-blue);
+        border-bottom: 2px solid #e2e8f0;
+    }
+
+    table td {
+        padding: 1rem;
+        border-bottom: 1px solid #e2e8f0;
+        color: var(--dark-gray);
+    }
+
+    table tbody tr:hover {
+        background-color: var(--light-bg);
+    }
+
+    .badge {
+        display: inline-block;
+        padding: 0.25rem 0.75rem;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .badge-active {
+        background-color: #d1fae5;
+        color: var(--success);
+    }
+
+    .badge-expired {
+        background-color: #fee2e2;
+        color: var(--danger);
+    }
+
+    .badge-cancelled {
+        background-color: #f3f4f6;
+        color: var(--gray);
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 3rem;
+        color: var(--gray);
+    }
+
+    .empty-state i {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+        opacity: 0.5;
+    }
+
+    @media (max-width: 768px) {
+        .membership-header {
+            flex-direction: column;
+            gap: 1rem;
+            text-align: center;
+        }
+
+        .membership-details {
+            grid-template-columns: 1fr;
+        }
+    }
