@@ -251,7 +251,7 @@ def admin_dashboard(request):
     new_members = User.objects.filter(
         role='member',
         date_joined__gte=seven_days_ago
-    ).prefetch_related('usermembership_set').order_by('-date_joined')[:10]
+    ).prefetch_related('memberships').order_by('-date_joined')[:10]
 
     # Recent payments (confirmed only)
     recent_payments = Payment.objects.filter(
