@@ -655,7 +655,7 @@ def walkin_purchase(request):
     
     # Get only ACTIVE passes
     passes = FlexibleAccess.objects.filter(is_active=True).order_by('duration_days')
-    recent_walkins = WalkInPayment.objects.select_related('pass_type')[:10]
+    recent_walkins = WalkInPayment.objects.select_related('pass_type').order_by('-payment_date')[:10]
     
     context = {
         'passes': passes,
