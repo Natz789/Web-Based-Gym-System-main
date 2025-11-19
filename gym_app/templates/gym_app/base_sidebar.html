@@ -90,6 +90,11 @@
                 <i class="fas fa-archive"></i>
                 <span>Archived Plans</span>
             </a>
+
+            <a href="{% url 'chatbot_config' %}" {% if 'chatbot-config' in request.path %}class="active"{% endif %}>
+                <i class="fas fa-robot"></i>
+                <span>AI Chatbot Config</span>
+            </a>
             <a href="/admin/" target="_blank">
                 <i class="fas fa-cog"></i>
                 <span>System Admin</span>
