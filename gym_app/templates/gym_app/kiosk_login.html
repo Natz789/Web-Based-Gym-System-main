@@ -27,31 +27,52 @@
         body {
             font-family: 'Poppins', sans-serif;
             background: linear-gradient(135deg, var(--primary-blue) 0%, var(--secondary-blue) 100%);
-            min-height: 100vh;
+            height: 100vh;
+            max-height: 100vh;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 2rem;
+            padding: clamp(0.5rem, 2vw, 2rem);
+            overflow: hidden;
         }
 
         .kiosk-container {
             background: var(--white);
-            border-radius: 30px;
-            padding: 4rem;
+            border-radius: clamp(15px, 3vw, 30px);
+            padding: clamp(1.5rem, 4vw, 4rem);
             max-width: 700px;
             width: 100%;
+            max-height: 95vh;
+            overflow-y: auto;
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            /* Smooth scrolling on overflow */
+            scrollbar-width: thin;
+            scrollbar-color: var(--gold) var(--light-bg);
+        }
+
+        .kiosk-container::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .kiosk-container::-webkit-scrollbar-track {
+            background: var(--light-bg);
+            border-radius: 10px;
+        }
+
+        .kiosk-container::-webkit-scrollbar-thumb {
+            background: var(--gold);
+            border-radius: 10px;
         }
 
         .kiosk-header {
             text-align: center;
-            margin-bottom: 3rem;
+            margin-bottom: clamp(1.5rem, 3vh, 3rem);
         }
 
         .kiosk-icon {
-            font-size: 6rem;
+            font-size: clamp(3rem, 8vw, 6rem);
             color: var(--gold);
-            margin-bottom: 1.5rem;
+            margin-bottom: clamp(0.75rem, 2vh, 1.5rem);
             animation: pulse 2s infinite;
         }
 
@@ -62,63 +83,64 @@
 
         .kiosk-header h1 {
             color: var(--primary-blue);
-            font-size: 2.5rem;
+            font-size: clamp(1.5rem, 5vw, 2.5rem);
             margin-bottom: 0.5rem;
             font-weight: 700;
         }
 
         .kiosk-header p {
             color: #64748b;
-            font-size: 1.2rem;
+            font-size: clamp(0.9rem, 2.5vw, 1.2rem);
         }
 
         .pin-instruction {
             background: linear-gradient(135deg, var(--light-bg) 0%, #dbeafe 100%);
-            padding: 1.5rem;
-            border-radius: 15px;
-            margin-bottom: 2rem;
+            padding: clamp(1rem, 2vw, 1.5rem);
+            border-radius: clamp(10px, 2vw, 15px);
+            margin-bottom: clamp(1rem, 2vh, 2rem);
             text-align: center;
         }
 
         .pin-instruction h3 {
             color: var(--primary-blue);
-            font-size: 1.3rem;
+            font-size: clamp(1rem, 2.5vw, 1.3rem);
             margin-bottom: 0.5rem;
         }
 
         .pin-instruction p {
             color: #64748b;
-            font-size: 1rem;
+            font-size: clamp(0.85rem, 2vw, 1rem);
         }
 
         .pin-input-container {
-            margin-bottom: 2rem;
+            margin-bottom: clamp(1rem, 2vh, 2rem);
         }
 
         .pin-input-label {
             text-align: center;
-            font-size: 1.3rem;
+            font-size: clamp(1rem, 2.5vw, 1.3rem);
             color: var(--primary-blue);
             font-weight: 600;
-            margin-bottom: 1.5rem;
+            margin-bottom: clamp(0.75rem, 2vh, 1.5rem);
         }
 
         .pin-display {
             display: flex;
             justify-content: center;
-            gap: 1rem;
-            margin-bottom: 2rem;
+            gap: clamp(0.5rem, 1.5vw, 1rem);
+            margin-bottom: clamp(1rem, 2vh, 2rem);
+            flex-wrap: wrap;
         }
 
         .pin-digit {
-            width: 70px;
-            height: 80px;
+            width: clamp(45px, 9vw, 70px);
+            height: clamp(50px, 10vh, 80px);
             border: 3px solid #e2e8f0;
-            border-radius: 15px;
+            border-radius: clamp(10px, 2vw, 15px);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 2.5rem;
+            font-size: clamp(1.5rem, 4vw, 2.5rem);
             font-weight: 700;
             color: var(--primary-blue);
             background: var(--white);
@@ -145,20 +167,21 @@
         .numpad {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 1rem;
-            margin-bottom: 2rem;
+            gap: clamp(0.5rem, 1.5vw, 1rem);
+            margin-bottom: clamp(1rem, 2vh, 2rem);
         }
 
         .numpad-btn {
-            height: 80px;
+            height: clamp(50px, 10vh, 80px);
             border: none;
-            border-radius: 15px;
-            font-size: 2rem;
+            border-radius: clamp(10px, 2vw, 15px);
+            font-size: clamp(1.2rem, 3vw, 2rem);
             font-weight: 700;
             cursor: pointer;
             transition: all 0.3s;
             background: var(--light-bg);
             color: var(--primary-blue);
+            padding: clamp(0.5rem, 1vw, 1rem);
         }
 
         .numpad-btn:hover {
@@ -185,7 +208,7 @@
             background: linear-gradient(135deg, var(--gold) 0%, var(--dark-gold) 100%);
             color: var(--primary-blue);
             grid-column: span 3;
-            font-size: 1.5rem;
+            font-size: clamp(1rem, 2.5vw, 1.5rem);
         }
 
         .numpad-btn.submit:hover {
@@ -244,6 +267,131 @@
         #pinInput {
             position: absolute;
             left: -9999px;
+        }
+
+        /* Media Queries for Extra Small Screens */
+        @media (max-width: 480px) {
+            .kiosk-container {
+                padding: 1rem;
+                border-radius: 15px;
+            }
+
+            .kiosk-header {
+                margin-bottom: 1rem;
+            }
+
+            .kiosk-icon {
+                font-size: 2.5rem;
+                margin-bottom: 0.5rem;
+            }
+
+            .kiosk-header h1 {
+                font-size: 1.5rem;
+            }
+
+            .kiosk-header p {
+                font-size: 0.9rem;
+            }
+
+            .pin-digit {
+                width: 40px;
+                height: 45px;
+                font-size: 1.3rem;
+                border: 2px solid #e2e8f0;
+            }
+
+            .numpad-btn {
+                height: 50px;
+                font-size: 1.2rem;
+            }
+
+            .numpad-btn.submit {
+                font-size: 1rem;
+            }
+
+            .pin-instruction {
+                padding: 0.75rem;
+                margin-bottom: 1rem;
+            }
+
+            .pin-instruction h3 {
+                font-size: 0.95rem;
+            }
+
+            .pin-instruction p {
+                font-size: 0.8rem;
+            }
+        }
+
+        /* Media Queries for Very Small Height (Landscape phones) */
+        @media (max-height: 600px) {
+            body {
+                padding: 0.5rem;
+            }
+
+            .kiosk-container {
+                padding: 1rem;
+                max-height: 98vh;
+            }
+
+            .kiosk-header {
+                margin-bottom: 0.75rem;
+            }
+
+            .kiosk-icon {
+                font-size: 2rem;
+                margin-bottom: 0.5rem;
+            }
+
+            .kiosk-header h1 {
+                font-size: 1.3rem;
+                margin-bottom: 0.25rem;
+            }
+
+            .kiosk-header p {
+                font-size: 0.85rem;
+            }
+
+            .pin-instruction {
+                padding: 0.75rem;
+                margin-bottom: 0.75rem;
+            }
+
+            .pin-digit {
+                height: 45px;
+            }
+
+            .numpad-btn {
+                height: 45px;
+            }
+
+            .pin-display, .pin-input-container, .numpad {
+                margin-bottom: 0.75rem;
+            }
+
+            .back-link {
+                margin-top: 1rem;
+            }
+        }
+
+        /* Accessibility: Reduced Motion */
+        @media (prefers-reduced-motion: reduce) {
+            .kiosk-icon {
+                animation: none;
+            }
+
+            .numpad-btn:hover,
+            .numpad-btn.submit:hover {
+                transform: none;
+            }
+
+            .alert {
+                animation: none;
+            }
+
+            .pin-digit.error {
+                animation: none;
+            }
         }
     </style>
 </head>
