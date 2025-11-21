@@ -2,12 +2,14 @@
 Enhanced AI Chatbot Engine for Rhose Gym
 Supports dynamic model switching, conversation persistence, and streaming responses
 Optimized for E595 ThinkPad (8-16GB RAM)
+Performance optimized with caching for faster response times
 """
 
 import ollama
 import uuid
 import time
 from django.conf import settings
+from django.core.cache import cache
 from .models import (
     User, MembershipPlan, FlexibleAccess, UserMembership, Payment, Attendance,
     ChatbotConfig, Conversation, ConversationMessage
@@ -82,10 +84,19 @@ class GymChatbot:
             if role == 'user' and not self.conversation.title:
                 self.conversation.generate_title()
 
-    def get_system_context(self):
-        """Generate system context based on user role and gym data"""
+    @staticmethod
+    def _get_static_base_context():
+        """
+        Get cached static base context that rarely changes.
+        Cached for 1 hour to improve performance.
+        """
+        cache_key = 'chatbot_static_base_context'
+        cached_context = cache.get(cache_key)
 
-        # Base gym information
+        if cached_context:
+            return cached_context
+
+        # Base gym information (static)
         context = """You are FitBot, an AI customer service assistant for Rhose Gym, a modern fitness center.
 Your primary role is to provide excellent customer service and answer frequently asked questions about:
 
@@ -113,77 +124,12 @@ Your primary role is to provide excellent customer service and answer frequently
    - Provide basic workout guidance
    - Share gym etiquette and safety rules
 
-5. GENERAL FAQS
-   - How to register and create an account
-   - How to check in/out using kiosk PIN
-   - How to renew or extend memberships
-   - Lost PIN or account access issues
-
 Always be friendly, professional, helpful, and empathetic. Prioritize customer satisfaction.
 Keep your responses concise, clear, and action-oriented. When discussing the gym system, use the data provided.
 If you don't know something specific, politely direct the user to contact the gym staff directly.
 """
 
-        # Add gym data context
-        active_plans = MembershipPlan.objects.filter(is_active=True)
-        if active_plans.exists():
-            context += "\n\nAVAILABLE MEMBERSHIP PLANS:\n"
-            for plan in active_plans:
-                context += f"- {plan.name}: ₱{plan.price} for {plan.duration_days} days\n"
-                if plan.description:
-                    context += f"  Description: {plan.description}\n"
-
-        walk_in_passes = FlexibleAccess.objects.filter(is_active=True)
-        if walk_in_passes.exists():
-            context += "\n\nWALK-IN PASSES:\n"
-            for pass_obj in walk_in_passes:
-                context += f"- {pass_obj.name}: ₱{pass_obj.price} for {pass_obj.duration_days} day(s)\n"
-
-        # Add user-specific context
-        if self.user and self.user.is_authenticated:
-            context += f"\n\nCURRENT USER: {self.user.get_full_name()} ({self.user.role})\n"
-
-            if self.user.role == 'member':
-                # Get member's active membership
-                active_membership = UserMembership.objects.filter(
-                    user=self.user,
-                    status='active',
-                    end_date__gte=date.today()
-                ).first()
-
-                if active_membership:
-                    context += f"Active Membership: {active_membership.plan.name}\n"
-                    context += f"Days Remaining: {active_membership.days_remaining()}\n"
-                    context += f"Expires: {active_membership.end_date}\n"
-
-                    # Get kiosk PIN
-                    if self.user.kiosk_pin:
-                        context += f"Kiosk PIN: {self.user.kiosk_pin}\n"
-                else:
-                    context += "No active membership\n"
-
-                # Get recent attendance
-                recent_attendance = Attendance.objects.filter(
-                    user=self.user
-                ).order_by('-check_in')[:5]
-
-                if recent_attendance.exists():
-                    context += f"\nRECENT GYM VISITS: {recent_attendance.count()} visits logged\n"
-
-            elif self.user.role in ['admin', 'staff']:
-                # Get today's stats for staff/admin
-                today = date.today()
-                today_checkins = Attendance.objects.filter(
-                    check_in__date=today
-                ).count()
-                currently_in = Attendance.objects.filter(
-                    check_out__isnull=True
-                ).count()
-
-                context += f"\nTODAY'S STATS:\n"
-                context += f"- Check-ins today: {today_checkins}\n"
-                context += f"- Currently in gym: {currently_in}\n"
-
+        # Add static gym information
         context += "\n\nGYM FACILITIES:\n"
         context += "- Cardio equipment (treadmills, bikes, ellipticals)\n"
         context += "- Strength training (free weights, machines)\n"
@@ -204,7 +150,7 @@ If you don't know something specific, politely direct the user to contact the gy
         context += "Q: What if my payment is pending?\n"
         context += "A: Pending payments need to be confirmed by staff. Check your dashboard or contact us for status.\n\n"
         context += "Q: How do I use my kiosk PIN?\n"
-        context += "A: Enter your 4-digit PIN at the kiosk to check in when you arrive and check out when you leave.\n\n"
+        context += "A: Enter your 6-digit PIN at the kiosk to check in when you arrive and check out when you leave.\n\n"
         context += "Q: Can I renew my membership?\n"
         context += "A: Yes! You can purchase a new membership plan from the Membership Plans page before or after your current one expires.\n\n"
         context += "Q: What's the difference between membership and walk-in pass?\n"
@@ -212,11 +158,137 @@ If you don't know something specific, politely direct the user to contact the gy
         context += "Q: How do I register for the gym?\n"
         context += "A: Click 'Join Now' or 'Register' on the homepage, fill out your details, choose a membership plan, and complete payment.\n\n"
 
+        # Cache for 1 hour
+        cache.set(cache_key, context, 3600)
         return context
 
-    def get_fitness_knowledge(self):
-        """General fitness and gym culture knowledge"""
-        return """
+    @staticmethod
+    def _get_cached_membership_plans():
+        """Get cached membership plans. Cached for 10 minutes."""
+        cache_key = 'chatbot_membership_plans'
+        cached_plans = cache.get(cache_key)
+
+        if cached_plans:
+            return cached_plans
+
+        active_plans = MembershipPlan.objects.filter(is_active=True)
+        plans_text = ""
+
+        if active_plans.exists():
+            plans_text = "\n\nAVAILABLE MEMBERSHIP PLANS:\n"
+            for plan in active_plans:
+                plans_text += f"- {plan.name}: ₱{plan.price} for {plan.duration_days} days\n"
+                if plan.description:
+                    plans_text += f"  Description: {plan.description}\n"
+
+        # Cache for 10 minutes
+        cache.set(cache_key, plans_text, 600)
+        return plans_text
+
+    @staticmethod
+    def _get_cached_walkin_passes():
+        """Get cached walk-in passes. Cached for 10 minutes."""
+        cache_key = 'chatbot_walkin_passes'
+        cached_passes = cache.get(cache_key)
+
+        if cached_passes:
+            return cached_passes
+
+        walk_in_passes = FlexibleAccess.objects.filter(is_active=True)
+        passes_text = ""
+
+        if walk_in_passes.exists():
+            passes_text = "\n\nWALK-IN PASSES:\n"
+            for pass_obj in walk_in_passes:
+                passes_text += f"- {pass_obj.name}: ₱{pass_obj.price} for {pass_obj.duration_days} day(s)\n"
+
+        # Cache for 10 minutes
+        cache.set(cache_key, passes_text, 600)
+        return passes_text
+
+    def get_system_context(self):
+        """
+        Generate system context based on user role and gym data.
+        Optimized with caching for faster performance.
+        """
+        # Start with cached static base context
+        context = self._get_static_base_context()
+
+        # Add cached membership plans and walk-in passes
+        context += self._get_cached_membership_plans()
+        context += self._get_cached_walkin_passes()
+
+        # Add user-specific context (not cached as it's frequently changing)
+        if self.user and self.user.is_authenticated:
+            context += f"\n\nCURRENT USER: {self.user.get_full_name()} ({self.user.role})\n"
+
+            if self.user.role == 'member':
+                # Get member's active membership with optimized query
+                active_membership = UserMembership.objects.filter(
+                    user=self.user,
+                    status='active',
+                    end_date__gte=date.today()
+                ).select_related('plan').first()
+
+                if active_membership:
+                    context += f"Active Membership: {active_membership.plan.name}\n"
+                    context += f"Days Remaining: {active_membership.days_remaining()}\n"
+                    context += f"Expires: {active_membership.end_date}\n"
+
+                    # Get kiosk PIN
+                    if self.user.kiosk_pin:
+                        context += f"Kiosk PIN: {self.user.kiosk_pin}\n"
+                else:
+                    context += "No active membership\n"
+
+                # Get recent attendance count (optimized - only count, no full data)
+                recent_count = Attendance.objects.filter(
+                    user=self.user
+                ).count()
+
+                if recent_count > 0:
+                    context += f"\nRECENT GYM VISITS: {recent_count} visits logged\n"
+
+            elif self.user.role in ['admin', 'staff']:
+                # Cache staff stats for 2 minutes (frequently accessed)
+                cache_key = f'chatbot_staff_stats_{date.today()}'
+                cached_stats = cache.get(cache_key)
+
+                if cached_stats:
+                    context += cached_stats
+                else:
+                    # Get today's stats for staff/admin
+                    today = date.today()
+                    today_checkins = Attendance.objects.filter(
+                        check_in__date=today
+                    ).count()
+                    currently_in = Attendance.objects.filter(
+                        check_out__isnull=True
+                    ).count()
+
+                    stats_text = f"\nTODAY'S STATS:\n"
+                    stats_text += f"- Check-ins today: {today_checkins}\n"
+                    stats_text += f"- Currently in gym: {currently_in}\n"
+
+                    # Cache for 2 minutes
+                    cache.set(cache_key, stats_text, 120)
+                    context += stats_text
+
+        return context
+
+    @staticmethod
+    def get_fitness_knowledge():
+        """
+        General fitness and gym culture knowledge.
+        Cached for 1 hour as it's completely static.
+        """
+        cache_key = 'chatbot_fitness_knowledge'
+        cached_knowledge = cache.get(cache_key)
+
+        if cached_knowledge:
+            return cached_knowledge
+
+        knowledge = """
 WORKOUT TIPS:
 - Warm up 5-10 minutes before exercise
 - Progressive overload: gradually increase weight/reps
@@ -250,6 +322,9 @@ COMMON MISTAKES:
 - Inconsistent training
 - Overtraining without rest
 """
+        # Cache for 1 hour
+        cache.set(cache_key, knowledge, 3600)
+        return knowledge
 
     def chat(self, user_message):
         """
@@ -439,6 +514,27 @@ COMMON MISTAKES:
                 "status": "error",
                 "message": f"Ollama is not running: {str(e)}"
             }
+
+    @staticmethod
+    def clear_cache():
+        """
+        Clear all chatbot-related cache.
+        Should be called when gym data (plans, passes) is updated.
+        """
+        cache_keys = [
+            'chatbot_static_base_context',
+            'chatbot_membership_plans',
+            'chatbot_walkin_passes',
+            'chatbot_fitness_knowledge',
+        ]
+
+        for key in cache_keys:
+            cache.delete(key)
+
+        # Clear staff stats cache (varies by date)
+        # This is a wildcard delete - in production, use cache.delete_pattern if available
+        today = date.today()
+        cache.delete(f'chatbot_staff_stats_{today}')
 
 
 # Legacy compatibility function
