@@ -1,0 +1,174 @@
+{% extends 'gym_app/base_sidebar.html' %}
+
+{% block title %}Edit Staff - {{ staff_member.get_full_name }} - GymFit Pro{% endblock %}
+
+{% block content %}
+{% load static %}
+<link rel="stylesheet" href="{% static 'gym_app/css/pages/create_staff.css' %}">
+
+<div class="page-header">
+    <h1><i class="fas fa-user-edit"></i> Edit Staff Details</h1>
+</div>
+
+<div class="auth-container">
+    <div class="auth-card">
+        <div class="auth-header">
+            <div class="auth-icon">
+                <i class="fas fa-user-tie"></i>
+            </div>
+            <h2>Update Staff Information</h2>
+            <p>Editing: {{ staff_member.username }}</p>
+        </div>
+
+        <form method="post" action="{% url 'edit_staff' staff_member.id %}" enctype="multipart/form-data">
+            {% csrf_token %}
+
+            <!-- Profile Picture Section -->
+            <div class="form-group">
+                <label>
+                    <i class="fas fa-image"></i> Profile Picture
+                </label>
+                <div class="profile-image-preview">
+                    {% if staff_member.profile_image %}
+                    <img src="{{ staff_member.profile_image.url }}" alt="{{ staff_member.get_full_name }}" id="imagePreview" style="max-width: 200px; border-radius: 10px; margin-bottom: 1rem;">
+                    {% else %}
+                    <div class="avatar-placeholder" style="width: 200px; height: 200px; display: flex; align-items: center; justify-content: center; background: var(--light-bg); border-radius: 10px; margin-bottom: 1rem;">
+                        <i class="fas fa-user-tie" style="font-size: 4rem; color: var(--gray);"></i>
+                    </div>
+                    {% endif %}
+                </div>
+                <input
+                    type="file"
+                    id="profile_image"
+                    name="profile_image"
+                    class="form-control"
+                    accept="image/*"
+                    onchange="previewImage(this)"
+                >
+                <small style="color: var(--gray);">Upload a new profile picture (optional)</small>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label for="first_name">
+                        <i class="fas fa-user"></i> First Name <span class="required">*</span>
+                    </label>
+                    <input
+                        type="text"
+                        id="first_name"
+                        name="first_name"
+                        class="form-control"
+                        value="{{ staff_member.first_name }}"
+                        required
+                    >
+                </div>
+
+                <div class="form-group">
+                    <label for="last_name">
+                        <i class="fas fa-user"></i> Last Name <span class="required">*</span>
+                    </label>
+                    <input
+                        type="text"
+                        id="last_name"
+                        name="last_name"
+                        class="form-control"
+                        value="{{ staff_member.last_name }}"
+                        required
+                    >
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="email">
+                    <i class="fas fa-envelope"></i> Email <span class="required">*</span>
+                </label>
+                <input
+                    type="email"
+                    id="email"
+                    name="email"
+                    class="form-control"
+                    value="{{ staff_member.email }}"
+                    required
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="mobile_no">
+                    <i class="fas fa-phone"></i> Mobile Number
+                </label>
+                <input
+                    type="tel"
+                    id="mobile_no"
+                    name="mobile_no"
+                    class="form-control"
+                    value="{{ staff_member.mobile_no|default:'' }}"
+                    placeholder="09123456789"
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="birthdate">
+                    <i class="fas fa-birthday-cake"></i> Birthdate
+                </label>
+                <input
+                    type="date"
+                    id="birthdate"
+                    name="birthdate"
+                    class="form-control"
+                    value="{% if staff_member.birthdate %}{{ staff_member.birthdate|date:'Y-m-d' }}{% endif %}"
+                >
+            </div>
+
+            <div class="form-group">
+                <label for="address">
+                    <i class="fas fa-map-marker-alt"></i> Address
+                </label>
+                <textarea
+                    id="address"
+                    name="address"
+                    class="form-control"
+                    rows="3"
+                    placeholder="Enter address"
+                >{{ staff_member.address|default:'' }}</textarea>
+            </div>
+
+            <div class="form-row">
+                <button type="submit" class="btn btn-warning btn-submit">
+                    <i class="fas fa-save"></i> Update Staff Information
+                </button>
+            </div>
+        </form>
+
+        <div style="text-align: center; margin-top: 2rem; padding-top: 2rem; border-top: 1px solid #e2e8f0;">
+            <a href="{% url 'staff_detail' staff_member.id %}" style="color: var(--secondary-blue); text-decoration: none; font-weight: 600; margin-right: 1rem;">
+                <i class="fas fa-arrow-left"></i> Back to Staff Details
+            </a>
+            <a href="{% url 'members_list' %}" style="color: var(--gray); text-decoration: none; font-weight: 600;">
+                <i class="fas fa-list"></i> Back to Members List
+            </a>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function previewImage(input) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const preview = document.getElementById('imagePreview');
+            if (preview) {
+                preview.src = e.target.result;
+            } else {
+                // Create new image element if preview doesn't exist
+                const container = input.parentElement.querySelector('.profile-image-preview');
+                container.innerHTML = '<img src="' + e.target.result + '" alt="Preview" id="imagePreview" style="max-width: 200px; border-radius: 10px; margin-bottom: 1rem;">';
+            }
+        }
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+</script>
+{% endblock %}

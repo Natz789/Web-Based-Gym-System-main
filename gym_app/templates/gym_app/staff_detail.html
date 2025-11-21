@@ -1,0 +1,183 @@
+{% extends 'gym_app/base_sidebar.html' %}
+
+{% block title %}Staff Detail - {{ staff_member.get_full_name }} - GymFit Pro{% endblock %}
+
+{% block content %}
+{% load static %}
+<link rel="stylesheet" href="{% static 'gym_app/css/pages/member_detail.css' %}">
+
+<div class="page-header">
+    <h1><i class="fas fa-user-tie"></i> Staff Details</h1>
+    <div class="header-actions">
+        {% if user.is_admin %}
+        <a href="{% url 'edit_staff' staff_member.id %}" class="btn btn-warning">
+            <i class="fas fa-edit"></i> Edit Staff
+        </a>
+        {% endif %}
+        <a href="{% url 'members_list' %}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back to List
+        </a>
+    </div>
+</div>
+
+<!-- Staff Information Card -->
+<div class="profile-card">
+    <div class="profile-header">
+        <div class="profile-avatar">
+            {% if staff_member.profile_image %}
+            <img src="{{ staff_member.profile_image.url }}" alt="{{ staff_member.get_full_name }}">
+            {% else %}
+            <div class="avatar-placeholder">
+                <i class="fas fa-user-tie"></i>
+            </div>
+            {% endif %}
+        </div>
+        <div class="profile-info">
+            <h2>{{ staff_member.get_full_name }}</h2>
+            <p class="profile-role">
+                <span class="badge badge-staff">
+                    <i class="fas fa-user-tie"></i> {{ staff_member.role|upper }}
+                </span>
+            </p>
+            <p class="profile-joined">
+                <i class="fas fa-calendar"></i>
+                Joined {{ staff_member.date_joined|date:"F d, Y" }}
+            </p>
+        </div>
+    </div>
+
+    <div class="profile-details">
+        <h3><i class="fas fa-info-circle"></i> Personal Information</h3>
+        <div class="details-grid">
+            <div class="detail-item">
+                <label><i class="fas fa-user"></i> Username</label>
+                <span>{{ staff_member.username }}</span>
+            </div>
+            <div class="detail-item">
+                <label><i class="fas fa-envelope"></i> Email</label>
+                <span>{{ staff_member.email }}</span>
+            </div>
+            <div class="detail-item">
+                <label><i class="fas fa-phone"></i> Mobile Number</label>
+                <span>{{ staff_member.mobile_no|default:"Not provided" }}</span>
+            </div>
+            <div class="detail-item">
+                <label><i class="fas fa-birthday-cake"></i> Age</label>
+                <span>{{ staff_member.age|default:"Not provided" }}</span>
+            </div>
+            <div class="detail-item">
+                <label><i class="fas fa-calendar-alt"></i> Birthdate</label>
+                <span>{{ staff_member.birthdate|date:"F d, Y"|default:"Not provided" }}</span>
+            </div>
+            <div class="detail-item full-width">
+                <label><i class="fas fa-map-marker-alt"></i> Address</label>
+                <span>{{ staff_member.address|default:"Not provided" }}</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activity -->
+<div class="activity-card">
+    <h3><i class="fas fa-history"></i> Recent Activity</h3>
+    {% if recent_activity %}
+    <div class="activity-list">
+        {% for activity in recent_activity %}
+        <div class="activity-item">
+            <div class="activity-icon">
+                {% if activity.severity == 'critical' %}
+                <i class="fas fa-exclamation-triangle" style="color: #ef4444;"></i>
+                {% elif activity.severity == 'warning' %}
+                <i class="fas fa-exclamation-circle" style="color: #f59e0b;"></i>
+                {% elif activity.severity == 'success' %}
+                <i class="fas fa-check-circle" style="color: #10b981;"></i>
+                {% else %}
+                <i class="fas fa-info-circle" style="color: #3b82f6;"></i>
+                {% endif %}
+            </div>
+            <div class="activity-content">
+                <p class="activity-description">{{ activity.description }}</p>
+                <p class="activity-time">
+                    <i class="fas fa-clock"></i>
+                    {{ activity.timestamp|date:"M d, Y - g:i A" }}
+                </p>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <i class="fas fa-inbox"></i>
+        <p>No recent activity found.</p>
+    </div>
+    {% endif %}
+</div>
+
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .badge-staff {
+        background-color: #fef3c7;
+        color: #f59e0b;
+        padding: 0.5rem 1rem;
+        border-radius: 12px;
+        font-size: 0.875rem;
+        font-weight: 600;
+        text-transform: uppercase;
+    }
+
+    .header-actions {
+        display: flex;
+        gap: 1rem;
+    }
+
+    .activity-card {
+        background: var(--white);
+        border-radius: 15px;
+        padding: 2rem;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+        margin-top: 2rem;
+    }
+
+    .activity-card h3 {
+        color: var(--primary-blue);
+        font-size: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .activity-list {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .activity-item {
+        display: flex;
+        gap: 1rem;
+        padding: 1rem;
+        background: var(--light-bg);
+        border-radius: 10px;
+        border-left: 4px solid var(--secondary-blue);
+    }
+
+    .activity-icon {
+        font-size: 1.5rem;
+    }
+
+    .activity-content {
+        flex: 1;
+    }
+
+    .activity-description {
+        color: var(--dark-gray);
+        font-weight: 500;
+        margin-bottom: 0.5rem;
+    }
+
+    .activity-time {
+        color: var(--gray);
+        font-size: 0.875rem;
+    }
+</style>
+{% endblock %}

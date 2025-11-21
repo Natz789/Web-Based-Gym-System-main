@@ -768,13 +768,15 @@ def reports_view(request):
 
 @login_required
 def members_list(request):
-    """List all members (admin/staff only)"""
+    """List all members and staff (admin/staff only)"""
     if not request.user.is_staff_or_admin():
         messages.error(request, 'Access denied.')
         return redirect('dashboard')
-    
+
+    # Get members and staff separately
     members = User.objects.filter(role='member').order_by('-date_joined')
-    
+    staff = User.objects.filter(role='staff').order_by('-date_joined')
+
     # Search functionality
     search_query = request.GET.get('search', '')
     if search_query:
@@ -785,12 +787,20 @@ def members_list(request):
             Q(last_name__icontains=search_query) |
             Q(mobile_no__icontains=search_query)
         )
-    
+        staff = staff.filter(
+            Q(username__icontains=search_query) |
+            Q(email__icontains=search_query) |
+            Q(first_name__icontains=search_query) |
+            Q(last_name__icontains=search_query) |
+            Q(mobile_no__icontains=search_query)
+        )
+
     context = {
         'members': members,
+        'staff': staff,
         'search_query': search_query,
     }
-    
+
     return render(request, 'gym_app/members_list.html', context)
 
 
@@ -807,7 +817,7 @@ def create_staff_view(request):
         )
         messages.error(request, 'Access denied. Admin privileges required.')
         return redirect('dashboard')
-    
+
     if request.method == 'POST':
         username = request.POST.get('username')
         email = request.POST.get('email')
@@ -816,20 +826,20 @@ def create_staff_view(request):
         first_name = request.POST.get('first_name')
         last_name = request.POST.get('last_name')
         mobile_no = request.POST.get('mobile_no')
-        
+
         # Validation
         if password != password_confirm:
             messages.error(request, 'Passwords do not match.')
             return render(request, 'gym_app/create_staff.html')
-        
+
         if User.objects.filter(username=username).exists():
             messages.error(request, 'Username already exists.')
             return render(request, 'gym_app/create_staff.html')
-        
+
         if User.objects.filter(email=email).exists():
             messages.error(request, 'Email already registered.')
             return render(request, 'gym_app/create_staff.html')
-        
+
         # Create staff user
         user = User.objects.create_user(
             username=username,
@@ -841,7 +851,7 @@ def create_staff_view(request):
             role='staff',
             is_staff=True  # Django staff permission
         )
-        
+
         # Log staff creation
         AuditLog.log(
             action='user_created',
@@ -853,11 +863,107 @@ def create_staff_view(request):
             object_id=user.id,
             object_repr=str(user)
         )
-        
+
         messages.success(request, f'Staff user {username} created successfully!')
         return redirect('members_list')
-    
+
     return render(request, 'gym_app/create_staff.html')
+
+
+@login_required
+def staff_detail(request, user_id):
+    """View staff details (admin only)"""
+    if not request.user.is_admin():
+        AuditLog.log(
+            action='unauthorized_access',
+            user=request.user,
+            description=f'Attempted to access staff detail for user_id: {user_id}',
+            severity='warning',
+            request=request
+        )
+        messages.error(request, 'Access denied. Admin privileges required.')
+        return redirect('dashboard')
+
+    staff_member = get_object_or_404(User, id=user_id, role='staff')
+
+    # Get recent activity by this staff member from audit log
+    recent_activity = AuditLog.objects.filter(
+        user=staff_member
+    ).order_by('-timestamp')[:20]
+
+    context = {
+        'staff_member': staff_member,
+        'recent_activity': recent_activity,
+    }
+
+    return render(request, 'gym_app/staff_detail.html', context)
+
+
+@login_required
+def edit_staff(request, user_id):
+    """Edit staff details (admin only)"""
+    if not request.user.is_admin():
+        AuditLog.log(
+            action='unauthorized_access',
+            user=request.user,
+            description=f'Attempted to edit staff user_id: {user_id}',
+            severity='warning',
+            request=request
+        )
+        messages.error(request, 'Access denied. Admin privileges required.')
+        return redirect('dashboard')
+
+    staff_member = get_object_or_404(User, id=user_id, role='staff')
+
+    if request.method == 'POST':
+        # Update staff information
+        staff_member.first_name = request.POST.get('first_name', staff_member.first_name)
+        staff_member.last_name = request.POST.get('last_name', staff_member.last_name)
+        staff_member.email = request.POST.get('email', staff_member.email)
+        staff_member.mobile_no = request.POST.get('mobile_no', staff_member.mobile_no)
+        staff_member.address = request.POST.get('address', staff_member.address)
+
+        birthdate_str = request.POST.get('birthdate')
+        if birthdate_str:
+            try:
+                from datetime import datetime
+                staff_member.birthdate = datetime.strptime(birthdate_str, '%Y-%m-%d').date()
+            except ValueError:
+                messages.error(request, 'Invalid birthdate format.')
+                return redirect('edit_staff', user_id=user_id)
+
+        # Handle profile picture upload
+        profile_image = request.FILES.get('profile_image')
+        if profile_image:
+            # Delete old profile image if exists
+            if staff_member.profile_image:
+                old_image_path = staff_member.profile_image.path
+                if os.path.exists(old_image_path):
+                    os.remove(old_image_path)
+            staff_member.profile_image = profile_image
+
+        staff_member.save()
+
+        # Log staff update
+        AuditLog.log(
+            action='user_updated',
+            user=request.user,
+            description=f'Updated staff user: {staff_member.get_full_name()} ({staff_member.email})',
+            severity='info',
+            request=request,
+            model_name='User',
+            object_id=staff_member.id,
+            object_repr=str(staff_member)
+        )
+
+        messages.success(request, f'Staff user {staff_member.username} updated successfully!')
+        return redirect('staff_detail', user_id=user_id)
+
+    context = {
+        'staff_member': staff_member,
+    }
+
+    return render(request, 'gym_app/edit_staff.html', context)
 
 
 @login_required
