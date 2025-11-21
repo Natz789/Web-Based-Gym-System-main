@@ -1157,18 +1157,18 @@ def manage_plans_view(request):
     if not request.user.is_staff_or_admin():
         messages.error(request, 'Access denied.')
         return redirect('dashboard')
-    
+
     if request.method == 'POST':
         action = request.POST.get('action')
         plan_type = request.POST.get('plan_type')
         plan_id = request.POST.get('plan_id')
-        
+
         if action == 'add':
             name = request.POST.get('name')
             duration_days = request.POST.get('duration_days')
             price = request.POST.get('price')
             description = request.POST.get('description', '')
-            
+
             if plan_type == 'membership':
                 plan = MembershipPlan.objects.create(
                     name=name,
@@ -1197,13 +1197,16 @@ def manage_plans_view(request):
                     request=request
                 )
                 messages.success(request, f'Walk-in pass "{name}" created successfully!')
+
+            # Clear chatbot cache when plans are modified
+            GymChatbot.clear_cache()
         
         elif action == 'edit':
             name = request.POST.get('name')
             duration_days = request.POST.get('duration_days')
             price = request.POST.get('price')
             description = request.POST.get('description', '')
-            
+
             if plan_type == 'membership':
                 plan = get_object_or_404(MembershipPlan, id=plan_id)
                 plan.name = name
@@ -1232,6 +1235,9 @@ def manage_plans_view(request):
                     request=request
                 )
                 messages.success(request, f'Walk-in pass "{name}" updated successfully!')
+
+            # Clear chatbot cache when plans are modified
+            GymChatbot.clear_cache()
         
         elif action == 'toggle':
             if plan_type == 'membership':
@@ -1258,12 +1264,15 @@ def manage_plans_view(request):
                     request=request
                 )
                 messages.success(request, f'Pass "{pass_obj.name}" {status}!')
+
+            # Clear chatbot cache when plans are modified
+            GymChatbot.clear_cache()
         
         elif action == 'delete':
             if not request.user.is_admin():
                 messages.error(request, 'Only admins can delete plans.')
                 return redirect('manage_plans')
-            
+
             if plan_type == 'membership':
                 plan = get_object_or_404(MembershipPlan, id=plan_id)
                 plan_name = plan.name
@@ -1288,7 +1297,10 @@ def manage_plans_view(request):
                     request=request
                 )
                 messages.success(request, f'Pass "{pass_name}" deleted!')
-        
+
+            # Clear chatbot cache when plans are modified
+            GymChatbot.clear_cache()
+
         return redirect('manage_plans')
     
     context = {
