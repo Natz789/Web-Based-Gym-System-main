@@ -1514,7 +1514,6 @@ def chatbot_view(request):
     return render(request, 'gym_app/chatbot.html')
 
 
-@csrf_exempt
 def chatbot_api(request):
     """
     Optimized API endpoint for chatbot with faster response times

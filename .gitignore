@@ -1,6 +1,12 @@
 # Virtual environment
 venv/
 .env/
+env/
+
+# Environment variables
+.env
+.env.local
+.env.production
 
 # Python cache
 __pycache__/
@@ -12,6 +18,8 @@ __pycache__/
 db.sqlite3
 media/
 staticfiles/
+logs/
+*.log
 
 # VS Code
 .vscode/

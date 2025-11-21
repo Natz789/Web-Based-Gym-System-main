@@ -1,0 +1,23 @@
+# Core Framework
+Django==5.2.7
+
+# AI Chatbot
+ollama==0.3.3
+
+# Environment Variables
+python-decouple==3.8
+
+# Production Web Server
+gunicorn==23.0.0
+
+# Database (Production)
+psycopg2-binary==2.9.10
+
+# Image Processing
+Pillow==11.0.0
+
+# Static Files Serving
+whitenoise==6.8.2
+
+# Additional utilities
+python-dateutil==2.9.0
