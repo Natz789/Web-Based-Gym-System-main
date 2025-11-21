@@ -79,4 +79,14 @@ urlpatterns = [
     path('api/chatbot/models/', views.chatbot_models_list, name='chatbot_models_list'),
     path('api/chatbot/models/switch/', views.chatbot_model_switch, name='chatbot_model_switch'),
     path('api/chatbot/conversations/', views.chatbot_conversations_list, name='chatbot_conversations_list'),
+
+    # Hero Section Management (Admin)
+    path('admin/hero-sections/', views.manage_hero_sections, name='manage_hero_sections'),
+    path('admin/hero-sections/create/', views.create_hero_section, name='create_hero_section'),
+    path('admin/hero-sections/<int:section_id>/edit/', views.edit_hero_section, name='edit_hero_section'),
+    path('admin/hero-sections/<int:section_id>/delete/', views.delete_hero_section, name='delete_hero_section'),
+
+    # Gallery Management (Admin)
+    path('admin/gallery/', views.manage_gallery, name='manage_gallery'),
+    path('admin/gallery/upload/', views.upload_gallery_image, name='upload_gallery_image'),
 ]
