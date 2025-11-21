@@ -214,10 +214,21 @@ class UserMembership(models.Model):
     start_date = models.DateField()
     end_date = models.DateField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    
+     # NEW FIELDS FOR CANCELLATION
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    cancelled_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='cancelled_memberships'
+    )
+    cancellation_reason = models.TextField(blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         db_table = 'user_memberships'
         verbose_name = 'User Membership'
@@ -248,6 +259,13 @@ class UserMembership(models.Model):
             return (self.end_date - date.today()).days
         return 0
 
+    def cancel(self, user=None, reason=''):
+        """Cancel the membership"""
+        self.status = 'cancelled'
+        self.cancelled_at = timezone.now()
+        self.cancelled_by = user
+        self.cancellation_reason = reason
+        self.save()
 
 class Payment(models.Model):
     """Payment records for registered members"""
@@ -744,6 +762,11 @@ class ChatbotConfig(models.Model):
         ('phi3:3.8b', 'Phi 3 3.8B (Efficient, 12GB RAM)'),
         ('gemma2:2b', 'Gemma 2 2B (Fast, 8GB RAM)'),
         ('mistral:7b', 'Mistral 7B (High Quality, 16GB RAM)'),
+       
+        ('qwen2:1.5b', 'Qwen 2 1.5B (Multilingual, 8GB RAM)'),
+        ('qwen2:7b', 'Qwen 2 7B (Advanced Multilingual, 16GB RAM)'),
+        ('qwen2.5:7b', 'Qwen 2.5 7B (Latest, 16GB RAM)'),
+        ('qwenqwen2.5:0.5b', 'Ultra-fast responses (4GB RAM)'),
     ]
 
     # Singleton pattern - only one config record

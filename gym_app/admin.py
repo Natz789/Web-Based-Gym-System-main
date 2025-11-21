@@ -4,7 +4,7 @@ from .models import (
     User, MembershipPlan, FlexibleAccess, UserMembership, Payment, WalkInPayment,
     Analytics, Attendance, ChatbotConfig, Conversation, ConversationMessage
 )
-
+from .models import AuditLog
 
 # Update the UserAdmin in gym_app/admin.py
 # Replace the entire UserAdmin class
@@ -110,18 +110,28 @@ class FlexibleAccessAdmin(admin.ModelAdmin):
 class UserMembershipAdmin(admin.ModelAdmin):
     """Admin interface for User Memberships"""
     
-    list_display = ['user', 'plan', 'start_date', 'end_date', 'status', 'days_remaining']
-    list_filter = ['status', 'start_date', 'end_date']
+    list_display = ['user', 'plan', 'start_date', 'end_date', 'status', 'days_remaining', 'cancelled_display']
+    list_filter = ['status', 'start_date', 'end_date', 'created_at']
     search_fields = ['user__username', 'user__email', 'user__first_name', 'user__last_name']
     date_hierarchy = 'start_date'
+    readonly_fields = ['created_at', 'updated_at', 'cancelled_at']
     
     fieldsets = (
         ('Membership Details', {
             'fields': ('user', 'plan', 'start_date', 'end_date', 'status')
         }),
+        ('Cancellation Info', {
+            'fields': ('cancelled_by', 'cancelled_at', 'cancellation_reason'),
+            'classes': ('collapse',),
+            'description': 'Shows cancellation details if membership was cancelled'
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
     )
     
-    readonly_fields = ['created_at', 'updated_at']
+    actions = ['cancel_memberships_action', 'reactivate_memberships_action']
     
     def days_remaining(self, obj):
         """Display days remaining in membership"""
@@ -130,6 +140,40 @@ class UserMembershipAdmin(admin.ModelAdmin):
             return f"{days} days"
         return "Expired"
     days_remaining.short_description = 'Days Left'
+    
+    def cancelled_display(self, obj):
+        """Display cancellation status"""
+        if obj.status == 'cancelled':
+            return f"<i class='fas fa-check-circle' style='color: red;'></i> Cancelled"
+        return "-"
+    cancelled_display.short_description = 'Cancelled'
+    cancelled_display.allow_tags = True
+    
+    def cancel_memberships_action(self, request, queryset):
+        """Admin action to cancel memberships"""
+        count = 0
+        for membership in queryset:
+            if membership.status == 'active':
+                membership.cancel(user=request.user, reason='Cancelled by admin')
+                count += 1
+        
+        self.message_user(request, f'Cancelled {count} membership(s)')
+    cancel_memberships_action.short_description = 'Cancel selected memberships'
+    
+    def reactivate_memberships_action(self, request, queryset):
+        """Admin action to reactivate cancelled memberships"""
+        count = 0
+        for membership in queryset:
+            if membership.status == 'cancelled':
+                membership.status = 'active'
+                membership.cancelled_at = None
+                membership.cancelled_by = None
+                membership.cancellation_reason = ''
+                membership.save()
+                count += 1
+        
+        self.message_user(request, f'Reactivated {count} membership(s)')
+    reactivate_memberships_action.short_description = 'Reactivate selected memberships'
 
 
 @admin.register(Payment)
@@ -353,7 +397,13 @@ class ConversationMessageAdmin(admin.ModelAdmin):
     response_time_display.short_description = 'Response Time'
 
 
+
+
+
+
 # Customize admin site headers
 admin.site.site_header = "Gym Management System"
 admin.site.site_title = "Gym Admin"
 admin.site.index_title = "Welcome to Gym Management System"
+
+

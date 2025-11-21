@@ -50,6 +50,11 @@ urlpatterns = [
     path('members/<int:user_id>/', views.member_detail, name='member_detail'),
     path('create-staff/', views.create_staff_view, name='create_staff'),
 
+    path('membership/<int:membership_id>/cancel/', views.cancel_membership, name='cancel_membership'),
+    path('cancel-membership/<int:membership_id>/', 
+     views.cancel_membership_confirm, 
+     name='cancel_membership_confirm'),
+
     # Profile Settings
     path('profile/', views.profile_settings, name='profile_settings'),
     path('change-password/', views.change_password, name='change_password'),

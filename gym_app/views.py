@@ -896,6 +896,76 @@ def member_detail(request, user_id):
     return render(request, 'gym_app/member_detail.html', context)
 
 
+@login_required
+def cancel_membership(request, membership_id):
+    """Cancel an active membership"""
+    membership = get_object_or_404(UserMembership, id=membership_id)
+    
+    # Only the member or admin can cancel their membership
+    if request.user != membership.user and not request.user.is_admin():
+        messages.error(request, 'You can only cancel your own membership.')
+        return redirect('dashboard')
+    
+    # Can only cancel active memberships
+    if membership.status != 'active':
+        messages.error(request, f'Cannot cancel {membership.status} membership.')
+        return redirect('dashboard')
+    
+    if request.method == 'POST':
+        reason = request.POST.get('reason', '')
+        
+        # Cancel the membership
+        membership.cancel(user=request.user, reason=reason)
+        
+        # Log cancellation
+        AuditLog.log(
+            action='membership_cancelled',
+            user=request.user,
+            description=f'Membership cancelled: {membership.user.get_full_name()} - {membership.plan.name}. Reason: {reason}',
+            severity='warning',
+            request=request,
+            model_name='UserMembership',
+            object_id=membership.id,
+            object_repr=str(membership)
+        )
+        
+        messages.success(
+            request,
+            f'Your {membership.plan.name} membership has been cancelled successfully.'
+        )
+        
+        return redirect('dashboard')
+    
+    context = {
+        'membership': membership,
+    }
+    
+    return render(request, 'gym_app/cancel_membership.html', context)
+
+
+@login_required
+def cancel_membership_confirm(request, membership_id):
+    """Confirmation page for membership cancellation"""
+    membership = get_object_or_404(UserMembership, id=membership_id)
+    
+    # Only the member or admin can view this
+    if request.user != membership.user and not request.user.is_admin():
+        messages.error(request, 'Access denied.')
+        return redirect('dashboard')
+    
+    # Can only cancel active memberships
+    if membership.status != 'active':
+        messages.error(request, f'Cannot cancel {membership.status} membership.')
+        return redirect('dashboard')
+    
+    context = {
+        'membership': membership,
+    }
+    
+    return render(request, 'gym_app/cancel_membership_confirm.html', context)
+
+
+
 # ==================== Audit Trail Views ====================
 
 @login_required
@@ -1317,8 +1387,7 @@ def chatbot_view(request):
 @csrf_exempt
 def chatbot_api(request):
     """
-    API endpoint for chatbot interactions
-    Handles both authenticated and anonymous users
+    Optimized API endpoint for chatbot with faster response times
     """
     if request.method != 'POST':
         return JsonResponse({'error': 'POST method required'}, status=405)
@@ -1334,18 +1403,17 @@ def chatbot_api(request):
                 'error': 'Message cannot be empty'
             }, status=400)
 
-        # Initialize chatbot with current user
+        # Initialize chatbot
         user = request.user if request.user.is_authenticated else None
         session_key = request.session.session_key if not user else None
 
-        # Ensure session exists for anonymous users
         if not user and not session_key:
             request.session.create()
             session_key = request.session.session_key
 
         chatbot = GymChatbot(user=user, conversation_id=conversation_id, session_key=session_key)
 
-        # Get response from chatbot
+        # Get response (now optimized for speed)
         result = chatbot.chat(user_message)
 
         # Add quick suggestions
@@ -1362,10 +1430,11 @@ def chatbot_api(request):
     except Exception as e:
         return JsonResponse({
             'success': False,
-            'error': str(e)
+            'error': str(e),
+            'response': 'An error occurred. Please try again.'
         }, status=500)
-
-
+    
+    
 def chatbot_suggestions(request):
     """Get quick reply suggestions based on user context"""
     user = request.user if request.user.is_authenticated else None
