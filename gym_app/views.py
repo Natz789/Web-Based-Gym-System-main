@@ -14,7 +14,8 @@ from .chatbot import GymChatbot
 
 from .models import (
     User, MembershipPlan, FlexibleAccess,
-    UserMembership, Payment, WalkInPayment, Analytics, AuditLog, LoginActivity
+    UserMembership, Payment, WalkInPayment, Analytics, AuditLog, LoginActivity,
+    HeroSection, GymGallery
 )
 
 
@@ -32,9 +33,20 @@ def home(request):
         is_archived=False
     ).order_by('duration_days')
 
+    # Get active hero sections
+    hero_sections = HeroSection.objects.filter(is_active=True).order_by('display_order')
+
+    # Get featured gallery images
+    gallery_images = GymGallery.objects.filter(
+        is_active=True,
+        is_featured=True
+    ).order_by('display_order')[:6]  # Show max 6 featured images
+
     context = {
         'membership_plans': membership_plans,
         'walk_in_passes': walk_in_passes,
+        'hero_sections': hero_sections,
+        'gallery_images': gallery_images,
     }
     return render(request, 'gym_app/home.html', context)
 
@@ -2127,3 +2139,198 @@ def change_password(request):
         return redirect('profile_settings')
 
     return render(request, 'gym_app/change_password.html')
+
+
+# ==================== Hero Section Management (Admin) ====================
+
+@login_required
+def manage_hero_sections(request):
+    """Manage hero sections for homepage (admin only)"""
+    if not request.user.is_admin():
+        messages.error(request, "Access denied. Admin privileges required.")
+        return redirect("dashboard")
+
+    hero_sections = HeroSection.objects.all().order_by("display_order", "-created_at")
+    
+    context = {
+        "hero_sections": hero_sections,
+    }
+    return render(request, "gym_app/manage_hero_sections.html", context)
+
+
+@login_required
+def create_hero_section(request):
+    """Create new hero section (admin only)"""
+    if not request.user.is_admin():
+        messages.error(request, "Access denied. Admin privileges required.")
+        return redirect("dashboard")
+
+    if request.method == "POST":
+        title = request.POST.get("title")
+        subtitle = request.POST.get("subtitle")
+        description = request.POST.get("description")
+        background_image = request.FILES.get("background_image")
+        mobile_image = request.FILES.get("mobile_image")
+        cta_primary_text = request.POST.get("cta_primary_text", "Join Now")
+        cta_primary_link = request.POST.get("cta_primary_link", "/register/")
+        cta_secondary_text = request.POST.get("cta_secondary_text")
+        cta_secondary_link = request.POST.get("cta_secondary_link")
+        is_active = request.POST.get("is_active") == "on"
+        display_order = request.POST.get("display_order", 0)
+        overlay_opacity = request.POST.get("overlay_opacity", "0.50")
+
+        if not title or not background_image:
+            messages.error(request, "Title and background image are required.")
+            return redirect("create_hero_section")
+
+        hero_section = HeroSection.objects.create(
+            title=title,
+            subtitle=subtitle,
+            description=description,
+            background_image=background_image,
+            mobile_image=mobile_image,
+            cta_primary_text=cta_primary_text,
+            cta_primary_link=cta_primary_link,
+            cta_secondary_text=cta_secondary_text,
+            cta_secondary_link=cta_secondary_link,
+            is_active=is_active,
+            display_order=display_order,
+            overlay_opacity=overlay_opacity,
+            created_by=request.user
+        )
+
+        messages.success(request, f"Hero section \"{title}\" created successfully!")
+        return redirect("manage_hero_sections")
+
+    return render(request, "gym_app/create_hero_section.html")
+
+
+@login_required
+def edit_hero_section(request, section_id):
+    """Edit hero section (admin only)"""
+    if not request.user.is_admin():
+        messages.error(request, "Access denied. Admin privileges required.")
+        return redirect("dashboard")
+
+    hero_section = get_object_or_404(HeroSection, id=section_id)
+
+    if request.method == "POST":
+        hero_section.title = request.POST.get("title", hero_section.title)
+        hero_section.subtitle = request.POST.get("subtitle", hero_section.subtitle)
+        hero_section.description = request.POST.get("description", hero_section.description)
+        hero_section.cta_primary_text = request.POST.get("cta_primary_text", hero_section.cta_primary_text)
+        hero_section.cta_primary_link = request.POST.get("cta_primary_link", hero_section.cta_primary_link)
+        hero_section.cta_secondary_text = request.POST.get("cta_secondary_text")
+        hero_section.cta_secondary_link = request.POST.get("cta_secondary_link")
+        hero_section.is_active = request.POST.get("is_active") == "on"
+        hero_section.display_order = request.POST.get("display_order", hero_section.display_order)
+        hero_section.overlay_opacity = request.POST.get("overlay_opacity", hero_section.overlay_opacity)
+
+        # Handle image uploads
+        if request.FILES.get("background_image"):
+            if hero_section.background_image:
+                old_path = hero_section.background_image.path
+                if os.path.exists(old_path):
+                    os.remove(old_path)
+            hero_section.background_image = request.FILES.get("background_image")
+
+        if request.FILES.get("mobile_image"):
+            if hero_section.mobile_image:
+                old_path = hero_section.mobile_image.path
+                if os.path.exists(old_path):
+                    os.remove(old_path)
+            hero_section.mobile_image = request.FILES.get("mobile_image")
+
+        hero_section.save()
+
+        messages.success(request, f"Hero section \"{hero_section.title}\" updated successfully!")
+        return redirect("manage_hero_sections")
+
+    context = {
+        "hero_section": hero_section,
+    }
+    return render(request, "gym_app/edit_hero_section.html", context)
+
+
+@login_required
+def delete_hero_section(request, section_id):
+    """Delete hero section (admin only)"""
+    if not request.user.is_admin():
+        messages.error(request, "Access denied. Admin privileges required.")
+        return redirect("dashboard")
+
+    hero_section = get_object_or_404(HeroSection, id=section_id)
+
+    if request.method == "POST":
+        # Delete associated images
+        if hero_section.background_image:
+            if os.path.exists(hero_section.background_image.path):
+                os.remove(hero_section.background_image.path)
+        if hero_section.mobile_image:
+            if os.path.exists(hero_section.mobile_image.path):
+                os.remove(hero_section.mobile_image.path)
+
+        title = hero_section.title
+        hero_section.delete()
+
+        messages.success(request, f"Hero section \"{title}\" deleted successfully!")
+        return redirect("manage_hero_sections")
+
+    context = {
+        "hero_section": hero_section,
+    }
+    return render(request, "gym_app/delete_hero_section.html", context)
+
+
+# ==================== Gallery Management (Admin) ====================
+
+@login_required
+def manage_gallery(request):
+    """Manage gym gallery (admin only)"""
+    if not request.user.is_admin():
+        messages.error(request, "Access denied. Admin privileges required.")
+        return redirect("dashboard")
+
+    gallery_images = GymGallery.objects.all().order_by("display_order", "-created_at")
+    
+    context = {
+        "gallery_images": gallery_images,
+    }
+    return render(request, "gym_app/manage_gallery.html", context)
+
+
+@login_required
+def upload_gallery_image(request):
+    """Upload new gallery image (admin only)"""
+    if not request.user.is_admin():
+        messages.error(request, "Access denied. Admin privileges required.")
+        return redirect("dashboard")
+
+    if request.method == "POST":
+        title = request.POST.get("title")
+        description = request.POST.get("description")
+        image = request.FILES.get("image")
+        category = request.POST.get("category", "facility")
+        is_featured = request.POST.get("is_featured") == "on"
+        is_active = request.POST.get("is_active", "on") == "on"
+        display_order = request.POST.get("display_order", 0)
+
+        if not title or not image:
+            messages.error(request, "Title and image are required.")
+            return redirect("upload_gallery_image")
+
+        gallery_image = GymGallery.objects.create(
+            title=title,
+            description=description,
+            image=image,
+            category=category,
+            is_featured=is_featured,
+            is_active=is_active,
+            display_order=display_order,
+            uploaded_by=request.user
+        )
+
+        messages.success(request, f"Gallery image \"{title}\" uploaded successfully!")
+        return redirect("manage_gallery")
+
+    return render(request, "gym_app/upload_gallery_image.html")

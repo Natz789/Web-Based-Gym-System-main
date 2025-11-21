@@ -954,3 +954,146 @@ class ConversationMessage(models.Model):
 
     def __str__(self):
         return f"{self.role}: {self.content[:50]}..."
+
+
+# ==================== Home Page Hero Section ====================
+
+class HeroSection(models.Model):
+    """Hero section for homepage with images and content"""
+
+    title = models.CharField(
+        max_length=200,
+        help_text="Main headline for the hero section"
+    )
+    subtitle = models.CharField(
+        max_length=300,
+        blank=True,
+        null=True,
+        help_text="Subheading or tagline"
+    )
+    description = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Optional detailed description"
+    )
+
+    # Images
+    background_image = models.ImageField(
+        upload_to='hero_images/',
+        help_text="Main background image for hero section (Recommended: 1920x1080px)"
+    )
+    mobile_image = models.ImageField(
+        upload_to='hero_images/mobile/',
+        blank=True,
+        null=True,
+        help_text="Optional mobile-optimized image (Recommended: 768x1024px)"
+    )
+
+    # Call-to-action buttons
+    cta_primary_text = models.CharField(
+        max_length=100,
+        default="Join Now",
+        help_text="Text for primary CTA button"
+    )
+    cta_primary_link = models.CharField(
+        max_length=200,
+        default="/register/",
+        help_text="URL for primary CTA button"
+    )
+    cta_secondary_text = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="Text for secondary CTA button (optional)"
+    )
+    cta_secondary_link = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+        help_text="URL for secondary CTA button"
+    )
+
+    # Display settings
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Show this hero section on homepage"
+    )
+    display_order = models.IntegerField(
+        default=0,
+        help_text="Order of display (lower numbers appear first)"
+    )
+    overlay_opacity = models.DecimalField(
+        max_digits=3,
+        decimal_places=2,
+        default=0.50,
+        help_text="Overlay darkness (0.0 = transparent, 1.0 = full black)"
+    )
+
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='hero_sections_created'
+    )
+
+    class Meta:
+        db_table = 'hero_sections'
+        verbose_name = 'Hero Section'
+        verbose_name_plural = 'Hero Sections'
+        ordering = ['display_order', '-created_at']
+
+    def __str__(self):
+        return f"{self.title} ({'Active' if self.is_active else 'Inactive'})"
+
+
+class GymGallery(models.Model):
+    """Gallery of gym photos to showcase facilities"""
+
+    CATEGORY_CHOICES = [
+        ('equipment', 'Equipment'),
+        ('facility', 'Facility'),
+        ('classes', 'Classes'),
+        ('members', 'Members'),
+        ('events', 'Events'),
+        ('other', 'Other'),
+    ]
+
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True, null=True)
+    image = models.ImageField(
+        upload_to='gallery/',
+        help_text="Gallery image (Recommended: 800x600px)"
+    )
+    category = models.CharField(
+        max_length=50,
+        choices=CATEGORY_CHOICES,
+        default='facility'
+    )
+
+    is_featured = models.BooleanField(
+        default=False,
+        help_text="Feature on homepage"
+    )
+    is_active = models.BooleanField(default=True)
+    display_order = models.IntegerField(default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    uploaded_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
+
+    class Meta:
+        db_table = 'gym_gallery'
+        verbose_name = 'Gallery Image'
+        verbose_name_plural = 'Gallery Images'
+        ordering = ['display_order', '-created_at']
+
+    def __str__(self):
+        return f"{self.title} ({self.category})"
