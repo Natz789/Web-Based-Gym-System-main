@@ -872,8 +872,8 @@ def create_staff_view(request):
 
 @login_required
 def staff_detail(request, user_id):
-    """View staff details (admin only)"""
-    if not request.user.is_admin():
+    """View staff details (admin/staff can view)"""
+    if not request.user.is_staff_or_admin():
         AuditLog.log(
             action='unauthorized_access',
             user=request.user,
@@ -881,7 +881,7 @@ def staff_detail(request, user_id):
             severity='warning',
             request=request
         )
-        messages.error(request, 'Access denied. Admin privileges required.')
+        messages.error(request, 'Access denied.')
         return redirect('dashboard')
 
     staff_member = get_object_or_404(User, id=user_id, role='staff')
