@@ -98,18 +98,29 @@ To use it:
 
 ### Step 2: Configure Environment Variables
 
-In Render Dashboard for your web service:
+The `render.yaml` file automatically configures most environment variables. However, you MUST manually set the database password:
 
-1. **Go to Environment**
-2. **Add the following variables**:
+1. **In Render Dashboard** → Your web service
+2. **Go to Environment**
+3. **Add/Update the following critical variable**:
 
-#### Database Configuration
+#### Database Password (MUST BE SET MANUALLY)
+
+```
+DB_PASSWORD=kSZlA71WuWG7R9srM0yk3hzs1GbO8Ts6
+```
+
+⚠️ **IMPORTANT**: The `DB_PASSWORD` is intentionally marked as `sync: false` in `render.yaml` to prevent it from being stored in version control. You must:
+1. Set this value manually in Render Dashboard
+2. Never commit this to GitHub
+3. Use Render's environment variable settings for secrets
+
+#### Other Database Configuration (Auto-configured in render.yaml)
 
 ```
 DB_ENGINE=django.db.backends.postgresql
 DB_NAME=gym_4iym
 DB_USER=gym_4iym_user
-DB_PASSWORD=kSZlA71WuWG7R9srM0yk3hzs1GbO8Ts6
 DB_HOST=dpg-d4hgpcruibrs73djpc7g-a.singapore-postgres.render.com
 DB_PORT=5432
 ```
@@ -142,20 +153,22 @@ If using the Ollama AI chatbot feature:
 OLLAMA_HOST=http://your-ollama-instance:11434
 ```
 
-### Step 3: Configure Persistent Disk
+### Step 3: Persistent Disk (Auto-configured)
 
-For storing media uploads and static files:
+The `render.yaml` automatically configures a 10GB persistent disk for:
+- Static files (CSS, JavaScript, images)
+- User-uploaded media files
 
-1. **In Render Dashboard** → Your web service
-2. **Go to Disks**
-3. **Add a Disk**:
-   - **Mount Path**: `/var/www/gym-system`
-   - **Size**: 10GB (adjust based on needs)
-4. **Environment Variables** (automatically set):
-   ```
-   STATIC_ROOT=/var/www/gym-system/staticfiles
-   MEDIA_ROOT=/var/www/gym-system/media
-   ```
+**Auto-configured in render.yaml**:
+- **Mount Path**: `/var/data`
+- **Size**: 10GB
+- **Environment Variables**:
+  ```
+  STATIC_ROOT=/var/data/staticfiles
+  MEDIA_ROOT=/var/data/media
+  ```
+
+If you need to adjust the disk size, edit `render.yaml` and redeploy.
 
 ### Step 4: Configure Custom Domain (Optional)
 
@@ -171,12 +184,22 @@ To use your own domain instead of `*.onrender.com`:
 
 ### Step 5: Deploy Application
 
-1. **Go to Render Dashboard** → Your web service
-2. **Click Deploy** (or create a new deployment)
-3. **Watch the build logs**:
+1. **Push to GitHub** (your changes should already be pushed)
+2. **Go to Render Dashboard** → **New** → **Web Service**
+3. **Connect your GitHub repository**
+4. **Render auto-detects `render.yaml`** and loads configuration
+5. **Before deploying, set `DB_PASSWORD` environment variable**:
+   - Click **Environment** tab
+   - Click **Add Environment Variable**
+   - Key: `DB_PASSWORD`
+   - Value: `kSZlA71WuWG7R9srM0yk3hzs1GbO8Ts6`
+   - Click **Save**
+6. **Click Deploy**
+7. **Watch the build logs**:
    - Dependencies installation
    - Static file collection
    - Database migrations
+   - Gunicorn startup
    - Build completion
 
 **Initial deployment may take 5-15 minutes.**

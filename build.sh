@@ -4,34 +4,24 @@
 set -e
 
 echo "========================================"
-echo "Starting Gym System Render Build"
+echo "Gym System - Post-Build Setup Script"
 echo "========================================"
 
-# Update pip
-echo "Updating pip..."
-pip install --upgrade pip
-
-# Install Python dependencies
 echo "Installing Python dependencies..."
 pip install -r requirements.txt
 
-# Collect static files for production
-echo "Collecting static files..."
+echo "Collecting static files for production..."
 python manage.py collectstatic --noinput
 
-# Run database migrations
 echo "Running database migrations..."
-python manage.py migrate
-
-# Create cache table for session management
-echo "Creating cache table..."
-python manage.py migrate --database=default
-
-# Optional: Create superuser if using seed script
-# Uncomment if you have a custom management command for creating admin
-# echo "Creating superuser..."
-# python manage.py createadmin
+python manage.py migrate --noinput
 
 echo "========================================"
 echo "Build completed successfully!"
 echo "========================================"
+echo ""
+echo "To create a superuser, run:"
+echo "  python manage.py createsuperuser"
+echo ""
+echo "Or use the custom command:"
+echo "  python manage.py createadmin"

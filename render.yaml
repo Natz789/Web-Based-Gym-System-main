@@ -4,16 +4,17 @@ services:
     name: gym-system-web
     runtime: python
     pythonVersion: 3.11
-    plan: starter  # Change to 'standard' or higher for production
+    plan: starter
 
-    # Build configuration
-    buildCommand: bash ./build.sh
+    # Build command - install dependencies and prepare for production
+    buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate
 
     # Start command - Gunicorn with optimized workers
     startCommand: gunicorn gym_project.wsgi:application --bind 0.0.0.0:$PORT --workers 3 --worker-class sync --worker-timeout 60 --access-logfile - --error-logfile -
 
-    # Environment variables from .env
+    # Environment variables
     envVars:
+      # Django Configuration
       - key: ENVIRONMENT
         value: production
 
@@ -24,36 +25,26 @@ services:
         value: "False"
 
       - key: ALLOWED_HOSTS
-        scope: runtime
+        value: "*"
 
-      # PostgreSQL Configuration (from Render PostgreSQL instance)
+      # PostgreSQL Configuration - Use external URL for connection
       - key: DB_ENGINE
         value: django.db.backends.postgresql
 
       - key: DB_NAME
-        fromDatabase:
-          name: gym-database
-          property: database
+        value: gym_4iym
 
       - key: DB_USER
-        fromDatabase:
-          name: gym-database
-          property: username
+        value: gym_4iym_user
 
       - key: DB_PASSWORD
-        fromDatabase:
-          name: gym-database
-          property: password
+        sync: false
 
       - key: DB_HOST
-        fromDatabase:
-          name: gym-database
-          property: host
+        value: dpg-d4hgpcruibrs73djpc7g-a.singapore-postgres.render.com
 
       - key: DB_PORT
-        fromDatabase:
-          name: gym-database
-          property: port
+        value: "5432"
 
       # Security Headers
       - key: SECURE_SSL_REDIRECT
@@ -74,70 +65,18 @@ services:
       - key: SECURE_HSTS_PRELOAD
         value: "True"
 
-      # Static Files Location on Render
+      # Static Files Location
       - key: STATIC_ROOT
-        value: /var/www/gym-system/staticfiles
+        value: /var/data/staticfiles
 
       - key: MEDIA_ROOT
-        value: /var/www/gym-system/media
-
-      # Optional: Ollama Chatbot Configuration
-      # Uncomment and configure if using AI chatbot
-      # - key: OLLAMA_HOST
-      #   value: http://your-ollama-service:11434
+        value: /var/data/media
 
     # Health check
     healthCheckPath: /
 
-    # Scaling configuration
-    numInstances: 1  # Change to more instances for higher traffic
-
-    # Disk configuration for media uploads
+    # Disk configuration for persistent storage
     disk:
-      name: gym-system-disk
-      mountPath: /var/www/gym-system
-      sizeGB: 10  # Adjust based on storage needs
-
-    # Build cache (speeds up subsequent deployments)
-    buildCache: true
-
-  # PostgreSQL Database Service
-  - type: pserv
-    name: gym-database
-    plan: starter  # Change to standard or higher for production
-
-    # Database configuration
-    dbName: gym_4iym
-    username: gym_4iym_user
-    passwordSecureEnvVar: DB_ADMIN_PASSWORD
-
-    # Optional: Backup configuration
-    # backupRetention: 7  # 7-day backup retention
-
-    # Database instance region
-    region: singapore  # Change to match your app region
-
-databases:
-  - name: gym-database
-    engine: postgresql
-    version: "15"
-    plan: starter
-    region: singapore
-
-# Environment variable groups for easy management
-envVarGroups:
-  - name: Database
-    envVars:
-      - key: DB_ENGINE
-        value: django.db.backends.postgresql
-
-  - name: Security
-    envVars:
-      - key: SECURE_SSL_REDIRECT
-        value: "True"
-      - key: SESSION_COOKIE_SECURE
-        value: "True"
-      - key: CSRF_COOKIE_SECURE
-        value: "True"
-      - key: SECURE_HSTS_SECONDS
-        value: "31536000"
+      name: gym-system-data
+      mountPath: /var/data
+      sizeGB: 10
