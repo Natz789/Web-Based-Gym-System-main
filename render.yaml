@@ -1,0 +1,82 @@
+services:
+  # Web Service for Django Application
+  - type: web
+    name: gym-system-web
+    runtime: python
+    pythonVersion: 3.11
+    plan: starter
+
+    # Build command - install dependencies and prepare for production
+    buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate
+
+    # Start command - Gunicorn with optimized workers
+    startCommand: gunicorn gym_project.wsgi:application --bind 0.0.0.0:$PORT --workers 3 --worker-class sync --worker-timeout 60 --access-logfile - --error-logfile -
+
+    # Environment variables
+    envVars:
+      # Django Configuration
+      - key: ENVIRONMENT
+        value: production
+
+      - key: SECRET_KEY
+        generateValue: true
+
+      - key: DEBUG
+        value: "False"
+
+      - key: ALLOWED_HOSTS
+        value: "*"
+
+      # PostgreSQL Configuration - Use external URL for connection
+      - key: DB_ENGINE
+        value: django.db.backends.postgresql
+
+      - key: DB_NAME
+        value: gym_4iym
+
+      - key: DB_USER
+        value: gym_4iym_user
+
+      - key: DB_PASSWORD
+        sync: false
+
+      - key: DB_HOST
+        value: dpg-d4hgpcruibrs73djpc7g-a.singapore-postgres.render.com
+
+      - key: DB_PORT
+        value: "5432"
+
+      # Security Headers
+      - key: SECURE_SSL_REDIRECT
+        value: "True"
+
+      - key: SESSION_COOKIE_SECURE
+        value: "True"
+
+      - key: CSRF_COOKIE_SECURE
+        value: "True"
+
+      - key: SECURE_HSTS_SECONDS
+        value: "31536000"
+
+      - key: SECURE_HSTS_INCLUDE_SUBDOMAINS
+        value: "True"
+
+      - key: SECURE_HSTS_PRELOAD
+        value: "True"
+
+      # Static Files Location
+      - key: STATIC_ROOT
+        value: /var/data/staticfiles
+
+      - key: MEDIA_ROOT
+        value: /var/data/media
+
+    # Health check
+    healthCheckPath: /
+
+    # Disk configuration for persistent storage
+    disk:
+      name: gym-system-data
+      mountPath: /var/data
+      sizeGB: 10
